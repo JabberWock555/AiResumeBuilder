@@ -30,7 +30,11 @@
   --c-paper-rule: #8a8a93;
   --c-ink: #1b1b1f;
   --c-ink-muted: #55555e;
-  --font-ui: var(--font-inter), Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --c-resume-ink: #1b1b1f;
+  --c-resume-slate: #34495e;
+  --c-resume-teal: #0d5c58;
+  --c-resume-plum: #5a2d6b;
+  --font-ui: 'Inter Variable', Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   --font-code: ui-monospace, SFMono-Regular, Menlo, monospace;
   --r-sm: 6px;
   --r-md: 8px;
@@ -95,6 +99,10 @@
   --c-paper-rule: #8a8a93;
   --c-ink: #1b1b1f;
   --c-ink-muted: #55555e;
+  --c-resume-ink: #1b1b1f;
+  --c-resume-slate: #34495e;
+  --c-resume-teal: #0d5c58;
+  --c-resume-plum: #5a2d6b;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -129,6 +137,10 @@
     --c-paper-rule: #8a8a93;
     --c-ink: #1b1b1f;
     --c-ink-muted: #55555e;
+    --c-resume-ink: #1b1b1f;
+    --c-resume-slate: #34495e;
+    --c-resume-teal: #0d5c58;
+    --c-resume-plum: #5a2d6b;
   }
 }
 

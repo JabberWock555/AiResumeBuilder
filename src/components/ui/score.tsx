@@ -42,8 +42,12 @@ export function ScoreGauge({ score, className }: { score: number; className?: st
         <circle cx={100 + r * Math.cos(a)} cy={100 - r * Math.sin(a)} r="9" fill="var(--c-surface)" stroke="var(--c-text)" strokeWidth="3" />
       </svg>
       <div className="absolute inset-x-0 bottom-0 flex flex-col items-center">
-        <span className="text-2xl text-text tabular-nums">{score}</span>
-        <span className="text-xs text-text-muted">{b.label}</span>
+        <span aria-hidden className="text-2xl text-text tabular-nums">
+          {score}
+        </span>
+        <span aria-hidden className="text-xs text-text-muted">
+          {b.label}
+        </span>
       </div>
     </div>
   );
@@ -80,7 +84,9 @@ export function ScoreRing({ score, size = 40, label = "Resume score" }: { score:
           strokeDashoffset={c * (1 - score / 100)}
         />
       </svg>
-      <span className={cn("absolute font-semibold text-text tabular-nums", size >= 48 ? "text-sm" : "text-xs")}>{score}</span>
+      <span aria-hidden className={cn("absolute font-semibold text-text tabular-nums", size >= 48 ? "text-sm" : "text-xs")}>
+        {score}
+      </span>
     </span>
   );
 }

@@ -1,15 +1,20 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+// Open fonts, self-hosted from npm (no build-time download). Files only load
+// when a page uses that family.
+import "@fontsource-variable/inter";
+import "@fontsource-variable/source-serif-4";
+import "@fontsource-variable/source-sans-3";
+import "@fontsource/merriweather/400.css";
+import "@fontsource/merriweather/700.css";
+import "@fontsource/carlito/400.css";
+import "@fontsource/carlito/700.css";
+import "@fontsource/tinos/400.css";
+import "@fontsource/tinos/700.css";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "Resume builder",
-  description: "Build, score and tailor your resume.",
+  title: { default: "Resume builder", template: "%s · Resume builder" },
+  description: "Build, check and tailor your resume.",
 };
 
 // Sets data-theme before first paint so a saved light/dark choice doesn't flash.
@@ -18,7 +23,7 @@ const themeScript = `try{var t=localStorage.getItem("theme");if(t==="light"||t==
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={inter.variable} suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>

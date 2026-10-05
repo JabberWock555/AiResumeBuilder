@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Collapsible, Popover } from "radix-ui";
 import {
   ArrowDown,
@@ -343,8 +344,10 @@ export function BulletEditor({
   suggestion,
   onApplySuggestion,
   onDismissSuggestion,
+  onFocusBullet,
   newId,
 }: {
+  onFocusBullet?: (id: string) => void;
   bullets: Bullet[];
   onChange: (b: Bullet[]) => void;
   issues?: BulletIssue[];
@@ -354,13 +357,17 @@ export function BulletEditor({
   newId: () => string;
 }) {
   const refs = useRef(new Map<string, HTMLTextAreaElement>());
-  const focusLater = (id: string, atEnd = true) =>
-    requestAnimationFrame(() => {
-      const el = refs.current.get(id);
-      if (!el) return;
-      el.focus();
-      if (atEnd) el.setSelectionRange(el.value.length, el.value.length);
-    });
+  const focusRow = (id: string, atEnd = true) => {
+    const el = refs.current.get(id);
+    if (!el) return;
+    el.focus();
+    if (atEnd) el.setSelectionRange(el.value.length, el.value.length);
+  };
+  /** Change rows and move focus in the same tick, so fast typing never lands in the old row. */
+  const changeAndFocus = (next: Bullet[], id: string) => {
+    flushSync(() => onChange(next));
+    focusRow(id);
+  };
 
   function update(i: number, text: string) {
     const next = bullets.slice();
@@ -374,13 +381,11 @@ export function BulletEditor({
       const b = { id: newId(), text: "" };
       const next = bullets.slice();
       next.splice(i + 1, 0, b);
-      onChange(next);
-      focusLater(b.id);
+      changeAndFocus(next, b.id);
     } else if (e.key === "Backspace" && bullets[i].text === "" && bullets.length > 1) {
       e.preventDefault();
       const prev = bullets[i - 1] ?? bullets[i + 1];
-      onChange(bullets.filter((_, j) => j !== i));
-      focusLater(prev.id);
+      changeAndFocus(bullets.filter((_, j) => j !== i), prev.id);
     } else if (e.key === "Tab" && suggestion?.bulletId === bullets[i].id && onApplySuggestion && !e.shiftKey) {
       e.preventDefault();
       onApplySuggestion();
@@ -421,6 +426,7 @@ export function BulletEditor({
                   placeholder={i === 0 ? "What you did, and what changed because of it" : "Another result"}
                   onChange={(e) => update(i, e.target.value)}
                   onKeyDown={(e) => onKey(e, i)}
+                  onFocus={() => onFocusBullet?.(b.id)}
                   className="field-sizing-content min-h-6 flex-1 resize-none bg-transparent text-base text-text outline-none placeholder:text-text-muted"
                 />
               </div>
@@ -469,8 +475,7 @@ export function BulletEditor({
         className="self-start"
         onClick={() => {
           const b = { id: newId(), text: "" };
-          onChange([...bullets, b]);
-          focusLater(b.id);
+          changeAndFocus([...bullets, b], b.id);
         }}
       >
         <Plus aria-hidden className="size-4" /> Add bullet

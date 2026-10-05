@@ -8,6 +8,26 @@ import { Button } from "./button";
 
 /* ---------------------------------------------------------------- Dialog */
 
+/**
+ * Radix returns focus to a Dialog.Trigger on close. Dialogs opened from code
+ * have no trigger, so remember what had focus when the content mounted (layout
+ * effects run before Radix moves focus) and give it back.
+ */
+function useReturnFocus(onCloseAutoFocus?: (e: Event) => void) {
+  const opener = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    opener.current = document.activeElement as HTMLElement | null;
+  }, []);
+  return (e: Event) => {
+    onCloseAutoFocus?.(e);
+    if (e.defaultPrevented) return;
+    if (opener.current?.isConnected && opener.current !== document.body) {
+      e.preventDefault();
+      opener.current.focus();
+    }
+  };
+}
+
 const scrim =
   "fixed inset-0 z-50 bg-scrim/60 data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out";
 
@@ -37,16 +57,18 @@ export function DialogContent({
   description?: React.ReactNode;
   footer?: React.ReactNode;
 }) {
+  const onCloseAutoFocus = useReturnFocus(props.onCloseAutoFocus);
   return (
     <RDialog.Portal>
       <RDialog.Overlay className={scrim} />
       <RDialog.Content
+        {...props}
+        onCloseAutoFocus={onCloseAutoFocus}
         className={cn(
           "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-32px)] w-[calc(100vw-32px)] max-w-[560px] -translate-x-1/2 -translate-y-1/2 flex-col",
           "rounded-lg border border-border bg-surface shadow-modal data-[state=open]:animate-pop-in focus:outline-none",
           className,
         )}
-        {...props}
       >
         <div className="border-b border-border px-6 pt-5 pb-4 pr-14">
           <RDialog.Title className="text-lg text-text">{title}</RDialog.Title>
@@ -77,17 +99,19 @@ export function SheetContent({
   title: React.ReactNode;
   description?: React.ReactNode;
 }) {
+  const onCloseAutoFocus = useReturnFocus(props.onCloseAutoFocus);
   return (
     <RDialog.Portal>
       <RDialog.Overlay className={scrim} />
       <RDialog.Content
+        {...props}
+        onCloseAutoFocus={onCloseAutoFocus}
         className={cn(
           "fixed z-50 flex flex-col bg-surface shadow-modal focus:outline-none",
           "inset-x-0 bottom-0 max-h-[85dvh] rounded-t-lg data-[state=open]:animate-sheet-in-bottom",
           "md:inset-y-0 md:right-0 md:left-auto md:max-h-none md:w-[480px] md:rounded-none md:rounded-l-lg md:data-[state=open]:animate-sheet-in-right",
           className,
         )}
-        {...props}
       >
         <div className="border-b border-border px-6 pt-5 pb-4 pr-14">
           <RDialog.Title className="text-lg text-text">{title}</RDialog.Title>
@@ -120,24 +144,12 @@ export function ConfirmDialog({
   onConfirm: () => void;
   loading?: boolean;
 }) {
-  // Opened from code, not a Trigger, so remember who had focus and give it back.
-  const opener = useRef<HTMLElement | null>(null);
-  // Layout effects run before Radix's focus effect moves focus into the dialog.
-  useLayoutEffect(() => {
-    if (open) opener.current = document.activeElement as HTMLElement | null;
-  }, [open]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         title={title}
         description={description}
         className="max-w-[440px]"
-        onCloseAutoFocus={(e) => {
-          if (opener.current?.isConnected) {
-            e.preventDefault();
-            opener.current.focus();
-          }
-        }}
         footer={
           <>
             <RDialog.Close asChild>

@@ -32,6 +32,10 @@
   --color-paper-rule: var(--c-paper-rule);
   --color-ink: var(--c-ink);
   --color-ink-muted: var(--c-ink-muted);
+  --color-resume-ink: var(--c-resume-ink);
+  --color-resume-slate: var(--c-resume-slate);
+  --color-resume-teal: var(--c-resume-teal);
+  --color-resume-plum: var(--c-resume-plum);
 
   --font-*: initial;
   --font-sans: var(--font-ui);

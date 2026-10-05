@@ -38,7 +38,9 @@ export function Select({
   return (
     <RSelect.Root {...props}>
       <RSelect.Trigger {...a11y} className={cn(trigger, className)}>
-        <RSelect.Value placeholder={placeholder} />
+        <span className="min-w-0 flex-1 truncate">
+          <RSelect.Value placeholder={placeholder} />
+        </span>
         <RSelect.Icon>
           <ChevronDown aria-hidden className="size-4 text-text-muted" />
         </RSelect.Icon>

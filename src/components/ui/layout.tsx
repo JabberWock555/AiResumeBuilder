@@ -240,7 +240,7 @@ export function Skeleton({ className }: { className?: string }) {
   );
 }
 
-export function Avatar({ name, size = 32 }: { name: string; size?: 32 | 40 }) {
+export function Avatar({ name, size = 32, decorative }: { name: string; size?: 32 | 40; decorative?: boolean }) {
   const initials = name
     .split(/\s+/)
     .map((p) => p[0])
@@ -249,8 +249,9 @@ export function Avatar({ name, size = 32 }: { name: string; size?: 32 | 40 }) {
     .toUpperCase();
   return (
     <span
-      role="img"
-      aria-label={name}
+      role={decorative ? undefined : "img"}
+      aria-label={decorative ? undefined : name}
+      aria-hidden={decorative || undefined}
       className={cn(
         "inline-flex shrink-0 items-center justify-center rounded-pill bg-accent-soft font-semibold text-text",
         size === 40 ? "size-10 text-sm" : "size-8 text-xs",
