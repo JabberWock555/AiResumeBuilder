@@ -1,54 +1,54 @@
 feature,area,priority,original,clone,notes
-Sign up and log in with email and password,auth,must,yes,no,S05 S06
-Sign in with Google,auth,must,yes,no,
-Password reset and change email,auth,must,yes,no,S14 request email change
-Delete account,auth,must,yes,no,S14
-Dashboard listing resumes with sort and grid or list view,dashboard,must,yes,no,S11
-Rename duplicate and delete a resume,dashboard,must,yes,no,card menu
-Free usage meter in the sidebar (resumes and AI generations),billing,must,yes,no,S11 shows 0/1 and 0/10
-Create resume form: name and experience level (7 levels),setup,must,yes,no,S12
-Target a job at creation: title company job description,setup,must,yes,no,S12 switch
-Editor with section tabs and a resume switcher,editor,must,yes,no,S18-S24
-Contact section with show-on-resume switches for country and state,editor,must,yes,no,S18
-Experience entries: role company month-year dates Present location bullets,editor,must,yes,no,S19
-Education entries: degree institution location year minor GPA,editor,must,yes,no,S20
-Skills grouped as Category: skills,editor,must,yes,no,S21
-Professional summary,editor,must,yes,no,S22
-Add reorder collapse and delete entries,editor,must,yes,no,drag handle and card menu
-Autosave with a saved toast,editor,must,yes,no,
-AI bullet writer: suggest and complete with an inline suggestion to apply,ai,must,yes,no,S19; must not invent facts
-AI summary writer from position and skills,ai,must,yes,no,S22
-Live per-entry feedback panel (errors warnings passed),analysis,must,yes,no,S19
-Resume score 0-100 with 5 category scores and links to the entry,analysis,must,yes,no,S25
-Keyword targeting: matched and missing keywords from the JD,targeting,must,yes,no,S26
-Add a bullet for a missing keyword one at a time (yes no accept rewrite skip),targeting,must,yes,no,S26
-Finish Up page with paged live preview and keyword highlights,preview,must,yes,no,S24
-Templates with filters by format,templates,must,yes,no,S28; our own designs
-Formatting: font font size spacing divider indent text and accent colour,templates,must,yes,no,S27
-PDF download with a quota on Free,export,must,yes,no,S29
-Pro subscription through Stripe with monthly quarterly and lifetime,billing,should,yes,no,S17
+Sign up and log in with email and password,auth,must,yes,yes,S05 S06; S05 S06; local dev store until Supabase Auth in /replica-backend
+Sign in with Google,auth,must,yes,no,needs Supabase Auth + Google OAuth client (/replica-backend)
+Password reset and change email,auth,must,yes,partial,S14 request email change; reset works (link printed to the dev server log until email is set up); change email not built
+Delete account,auth,must,yes,yes,S14; S14 with typed-email confirm
+Dashboard listing resumes with sort and grid or list view,dashboard,must,yes,yes,S11; S11 with live thumbnails and score
+Rename duplicate and delete a resume,dashboard,must,yes,yes,card menu; card menu; delete confirms
+Free usage meter in the sidebar (resumes and AI generations),billing,must,yes,yes,S11 shows 0/1 and 0/10; also PDF downloads
+Create resume form: name and experience level (7 levels),setup,must,yes,yes,S12; S12
+Target a job at creation: title company job description,setup,must,yes,yes,S12 switch; S12; rule-based keyword extraction until the AI extractor
+Editor with section tabs and a resume switcher,editor,must,yes,yes,S18-S24; tab state survives navigation; unknown tab redirects once
+Contact section with show-on-resume switches for country and state,editor,must,yes,yes,"S18; state is free text, country is searchable"
+Experience entries: role company month-year dates Present location bullets,editor,must,yes,yes,S19; S19
+Education entries: degree institution location year minor GPA,editor,must,yes,yes,S20; S20
+Skills grouped as Category: skills,editor,must,yes,yes,S21; S21
+Professional summary,editor,must,yes,yes,S22; S22
+Add reorder collapse and delete entries,editor,must,yes,partial,drag handle and card menu; keyboard and menu reorder; mouse drag not built
+Autosave with a saved toast,editor,must,yes,yes,"save status in the header, revision check, retry offline, warns before leaving"
+AI bullet writer: suggest and complete with an inline suggestion to apply,ai,must,yes,partial,"S19; must not invent facts; UI, credits and placeholder rule done; demo writer until a model is connected"
+AI summary writer from position and skills,ai,must,yes,partial,S22; demo writer until a model is connected
+Live per-entry feedback panel (errors warnings passed),analysis,must,yes,yes,S19; inline under each bullet + per entry
+Resume score 0-100 with 5 category scores and links to the entry,analysis,must,yes,yes,S25; S25; job-match score uses the same keyword match as the panel
+Keyword targeting: matched and missing keywords from the JD,targeting,must,yes,yes,S26; S26; rule-based extraction for now
+Add a bullet for a missing keyword one at a time (yes no accept rewrite skip),targeting,must,yes,partial,S26; flow done; demo writer
+Finish Up page with paged live preview and keyword highlights,preview,must,yes,yes,S24; S24
+Templates with filters by format,templates,must,yes,partial,S28; our own designs; 3 templates; no format filters yet
+Formatting: font font size spacing divider indent text and accent colour,templates,must,yes,partial,"S27; font, size, spacing, divider, heading colour, paper size; no indent or text colour"
+PDF download with a quota on Free,export,must,yes,yes,S29; S29; real text layer; re-downloading an unchanged resume is free
+Pro subscription through Stripe with monthly quarterly and lifetime,billing,should,yes,no,S17; upgrade dialog only (S17)
 Prices in local currency,billing,should,yes,no,S17 INR
 Manage billing via Stripe Customer Portal,billing,should,yes,no,S14
-Optional sections: projects certifications coursework involvement,editor,should,yes,no,S23
+Optional sections: projects certifications coursework involvement,editor,should,yes,yes,S23; S23 menu
 Optional sections: awards publications references military service,editor,should,yes,no,S23 Pro in original
-Personalised field labels using the company name,editor,should,yes,no,S19 small but delightful
+Personalised field labels using the company name,editor,should,yes,yes,S19 small but delightful
 Version history of a resume,editor,should,yes,no,S19 beta in original
-Complete bullet with key numbers,ai,should,yes,no,S19 dropdown
-Rewrite a bullet,ai,should,yes,no,S26
-Score comparison histogram against other users,analysis,should,yes,no,S25 needs real data first
-Auto-adjust layout to fit the page,templates,should,yes,no,S27
+Complete bullet with key numbers,ai,should,yes,partial,S19 dropdown; demo writer
+Rewrite a bullet,ai,should,yes,partial,S26; demo writer
+Score comparison histogram against other users,analysis,should,yes,no,S25 needs real data first; needs real users
+Auto-adjust layout to fit the page,templates,should,yes,yes,S27; Fit to one page
 Template filters: saved recent recommended,templates,should,yes,no,S28
 Profile picture and contact icons,templates,should,yes,no,S27
-View as pages toggle,preview,should,yes,no,S27
-DOCX export,export,should,yes,no,S29
+View as pages toggle,preview,should,yes,yes,S27; Show page breaks
+DOCX export,export,should,yes,no,S29; button shown disabled
 Import an existing PDF or DOCX into sections,import,should,yes,no,S12 S36; not tried
 Drop a resume file on the dashboard to import,import,should,yes,no,S11
 Folders to group resumes,dashboard,should,yes,no,S11 Add Section
 Resume language setting,setup,should,yes,no,S12
 Onboarding questions to segment new users,onboarding,should,yes,no,S07 S08
-App language and light or dark theme,settings,should,yes,no,S13 S14
+App language and light or dark theme,settings,should,yes,partial,S13 S14; theme yes; app language no
 Sign in with Apple,auth,should,yes,no,
-Free anonymous ATS checker page,growth,could,yes,no,S03 lead magnet
+Free anonymous ATS checker page,growth,could,yes,no,S03 lead magnet; placeholder page
 AI Skills Explorer,ai,could,yes,no,S21 did not open in test
 AI cover letter writer linked to a resume,documents,could,yes,no,S35 phase 2
 AI resignation letter writer,documents,could,yes,no,
