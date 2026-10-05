@@ -1,0 +1,74 @@
+feature,area,priority,original,clone,notes
+Sign up and log in with email and password,auth,must,yes,no,S05 S06
+Sign in with Google,auth,must,yes,no,
+Password reset and change email,auth,must,yes,no,S14 request email change
+Delete account,auth,must,yes,no,S14
+Dashboard listing resumes with sort and grid or list view,dashboard,must,yes,no,S11
+Rename duplicate and delete a resume,dashboard,must,yes,no,card menu
+Free usage meter in the sidebar (resumes and AI generations),billing,must,yes,no,S11 shows 0/1 and 0/10
+Create resume form: name and experience level (7 levels),setup,must,yes,no,S12
+Target a job at creation: title company job description,setup,must,yes,no,S12 switch
+Editor with section tabs and a resume switcher,editor,must,yes,no,S18-S24
+Contact section with show-on-resume switches for country and state,editor,must,yes,no,S18
+Experience entries: role company month-year dates Present location bullets,editor,must,yes,no,S19
+Education entries: degree institution location year minor GPA,editor,must,yes,no,S20
+Skills grouped as Category: skills,editor,must,yes,no,S21
+Professional summary,editor,must,yes,no,S22
+Add reorder collapse and delete entries,editor,must,yes,no,drag handle and card menu
+Autosave with a saved toast,editor,must,yes,no,
+AI bullet writer: suggest and complete with an inline suggestion to apply,ai,must,yes,no,S19; must not invent facts
+AI summary writer from position and skills,ai,must,yes,no,S22
+Live per-entry feedback panel (errors warnings passed),analysis,must,yes,no,S19
+Resume score 0-100 with 5 category scores and links to the entry,analysis,must,yes,no,S25
+Keyword targeting: matched and missing keywords from the JD,targeting,must,yes,no,S26
+Add a bullet for a missing keyword one at a time (yes no accept rewrite skip),targeting,must,yes,no,S26
+Finish Up page with paged live preview and keyword highlights,preview,must,yes,no,S24
+Templates with filters by format,templates,must,yes,no,S28; our own designs
+Formatting: font font size spacing divider indent text and accent colour,templates,must,yes,no,S27
+PDF download with a quota on Free,export,must,yes,no,S29
+Pro subscription through Stripe with monthly quarterly and lifetime,billing,should,yes,no,S17
+Prices in local currency,billing,should,yes,no,S17 INR
+Manage billing via Stripe Customer Portal,billing,should,yes,no,S14
+Optional sections: projects certifications coursework involvement,editor,should,yes,no,S23
+Optional sections: awards publications references military service,editor,should,yes,no,S23 Pro in original
+Personalised field labels using the company name,editor,should,yes,no,S19 small but delightful
+Version history of a resume,editor,should,yes,no,S19 beta in original
+Complete bullet with key numbers,ai,should,yes,no,S19 dropdown
+Rewrite a bullet,ai,should,yes,no,S26
+Score comparison histogram against other users,analysis,should,yes,no,S25 needs real data first
+Auto-adjust layout to fit the page,templates,should,yes,no,S27
+Template filters: saved recent recommended,templates,should,yes,no,S28
+Profile picture and contact icons,templates,should,yes,no,S27
+View as pages toggle,preview,should,yes,no,S27
+DOCX export,export,should,yes,no,S29
+Import an existing PDF or DOCX into sections,import,should,yes,no,S12 S36; not tried
+Drop a resume file on the dashboard to import,import,should,yes,no,S11
+Folders to group resumes,dashboard,should,yes,no,S11 Add Section
+Resume language setting,setup,should,yes,no,S12
+Onboarding questions to segment new users,onboarding,should,yes,no,S07 S08
+App language and light or dark theme,settings,should,yes,no,S13 S14
+Sign in with Apple,auth,should,yes,no,
+Free anonymous ATS checker page,growth,could,yes,no,S03 lead magnet
+AI Skills Explorer,ai,could,yes,no,S21 did not open in test
+AI cover letter writer linked to a resume,documents,could,yes,no,S35 phase 2
+AI resignation letter writer,documents,could,yes,no,
+AI resume agent chat with starter prompts,ai,could,yes,no,S30 phase 2
+Job tracker with statuses saved applied interviewing rejected,jobs,could,yes,no,S31 works without their job feed
+AI mock interview with speech metrics,interview,could,yes,no,S32 phase 2
+Sample resume library by category,content,could,yes,no,S33 write our own
+Notification preferences,settings,could,yes,no,S15
+Google Drive export,export,could,yes,no,S29
+Partner affiliate code,growth,could,yes,no,S14
+In-app support chat,support,could,yes,no,Intercom bubble
+Suggest a feature link,support,could,yes,no,S13
+Time-limited first-session discount,billing,could,yes,no,S10; a fair version only
+Enterprise teams SSO and admin,enterprise,could,yes,no,
+iOS app,mobile,could,yes,no,
+Import a LinkedIn profile via its PDF export,import,could,no,no,our replacement for their extension
+Job search over 2M sourced jobs,jobs,could,yes,skip,their collected data; needs our own feed or a licensed API
+Hiring-partner matching and matching preferences,jobs,could,yes,skip,S09 S16 a two-sided marketplace
+LinkedIn import by scraping profile pages,import,could,yes,skip,LinkedIn terms forbid scraping
+Auto-apply on Greenhouse and Lever,jobs,could,yes,skip,terms and abuse risk
+Paid human resume review priced per word,review,could,yes,skip,S34 needs real reviewers
+Their templates sample library and placeholder content,content,could,yes,skip,owned by them
+User counts interview-rate stats and testimonials,marketing,could,yes,skip,their proof; never reuse
