@@ -1,9 +1,15 @@
 #!/usr/bin/env node
-// Seeds the local fake database (.data/db.json) with a demo account and one
-// filled-in resume, so screens have something real to show.
+// Seeds a demo account with one filled-in resume and a target job, so screens
+// have something real to show. The person and companies are made up.
 //
+// Local JSON data layer (no Supabase keys):
 //   npm run seed            add the demo account if it isn't there
 //   npm run seed -- --reset wipe .data/db.json first
+//
+// A Supabase project (keys in .env.local), development projects only:
+//   npm run seed -- --supabase            create the demo user (email already
+//                                         confirmed) and their resume
+//   npm run seed -- --supabase --reset    delete the demo user first
 //
 // Test login for local development only (not a real account anywhere):
 //   email:    demo@example.com
@@ -13,11 +19,24 @@ import { randomBytes, randomUUID, scryptSync } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+try {
+  process.loadEnvFile(".env.local");
+} catch {}
+const SUPABASE = process.argv.includes("--supabase");
+if (!SUPABASE && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  console.log("Supabase keys are set, so the app uses Supabase, not .data/db.json.");
+  console.log("To seed the Supabase project (development only): npm run seed -- --supabase");
+  process.exit(0);
+}
+
 const FILE = path.join(process.cwd(), ".data", "db.json");
 const EMAIL = "demo@example.com";
 const PASSWORD = "demo-password-123";
 
-const empty = () => ({ users: [], sessions: [], resetTokens: [], resumes: [], targets: [], usage: [], exports: [], aiLogs: [] });
+const empty = () => ({
+  users: [], sessions: [], emailTokens: [], resumes: [], targets: [], usage: [], exports: [], aiLogs: [],
+  subscriptions: [], stripeEvents: [], jobRuns: [],
+});
 const hash = (pw) => {
   const salt = randomBytes(16).toString("hex");
   return `${salt}:${scryptSync(pw, salt, 32).toString("hex")}`;
@@ -25,31 +44,8 @@ const hash = (pw) => {
 const id = (p) => `${p}_${Math.random().toString(36).slice(2, 10)}`;
 const now = new Date().toISOString();
 
-if (process.argv.includes("--reset")) await rm(FILE, { force: true });
-let db;
-try {
-  db = { ...empty(), ...JSON.parse(await readFile(FILE, "utf8")) };
-} catch {
-  db = empty();
-}
-
-if (db.users.some((u) => u.email === EMAIL)) {
-  console.log("Demo account already exists. Use --reset to start over.");
-  process.exit(0);
-}
-
-const userId = randomUUID();
-db.users.push({
-  id: userId, email: EMAIL, fullName: "Jordan Lee", plan: "free", theme: "system", appLanguage: "en-US",
-  onboarding: {}, createdAt: now, passwordHash: hash(PASSWORD),
-});
-
-const resumeId = randomUUID();
 const b = (text) => ({ id: id("b"), text });
-db.resumes.push({
-  id: resumeId,
-  userId,
-  folderId: null,
+const resume = {
   name: "Jordan Lee – Product Designer",
   experienceLevel: "mid_senior",
   language: "en-US",
@@ -101,16 +97,9 @@ db.resumes.push({
       },
     ],
   },
-  revision: 1,
-  source: "scratch",
-  lastScore: null,
-  createdAt: now,
-  updatedAt: now,
-});
+};
 
-db.targets.push({
-  userId,
-  resumeId,
+const target = {
   title: "Senior Product Designer",
   company: "Fernway",
   description:
@@ -127,11 +116,79 @@ db.targets.push({
     { term: "Stakeholder management", aliases: ["stakeholders"], weight: 1, kind: "soft" },
     { term: "Communication", aliases: [], weight: 1, kind: "soft" },
   ],
-  dismissed: [],
-  extractedAt: now,
-  extractionModel: "seed",
-});
+};
 
-await mkdir(path.dirname(FILE), { recursive: true });
-await writeFile(FILE, JSON.stringify(db, null, 1));
-console.log(`Seeded ${FILE}: demo account (see scripts/seed.mjs) with 1 resume.`);
+if (SUPABASE) await seedSupabase();
+else await seedLocal();
+
+async function seedLocal() {
+  if (process.argv.includes("--reset")) await rm(FILE, { force: true });
+  let db;
+  try {
+    db = { ...empty(), ...JSON.parse(await readFile(FILE, "utf8")) };
+  } catch {
+    db = empty();
+  }
+  if (db.users.some((u) => u.email === EMAIL)) {
+    console.log("Demo account already exists. Use --reset to start over.");
+    return;
+  }
+  const userId = randomUUID();
+  db.users.push({
+    id: userId, email: EMAIL, fullName: "Jordan Lee", plan: "free", theme: "system", appLanguage: "en-US",
+    onboarding: {}, createdAt: now, passwordHash: hash(PASSWORD), emailVerified: true, stripeCustomerId: null,
+  });
+  const resumeId = randomUUID();
+  db.resumes.push({ id: resumeId, userId, folderId: null, ...resume, revision: 1, source: "scratch", lastScore: null, createdAt: now, updatedAt: now });
+  db.targets.push({ userId, resumeId, ...target, dismissed: [], extractedAt: now, extractionModel: "seed" });
+  await mkdir(path.dirname(FILE), { recursive: true });
+  await writeFile(FILE, JSON.stringify(db, null, 1));
+  console.log(`Seeded ${FILE}: demo account (see scripts/seed.mjs) with 1 resume.`);
+}
+
+async function seedSupabase() {
+  const { createClient } = await import("@supabase/supabase-js");
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env.local");
+  if (process.env.VERCEL_ENV === "production") throw new Error("Refusing to seed a production project.");
+  const db = createClient(url, key, { auth: { persistSession: false } });
+
+  const existing = await findUser(db, EMAIL);
+  if (existing && !process.argv.includes("--reset")) {
+    console.log("Demo user already exists in Supabase. Use --reset to start over.");
+    return;
+  }
+  if (existing) await db.auth.admin.deleteUser(existing.id);
+
+  const { data, error } = await db.auth.admin.createUser({
+    email: EMAIL, password: PASSWORD, email_confirm: true, user_metadata: { full_name: "Jordan Lee" },
+  });
+  if (error) throw error;
+  const userId = data.user.id;
+  const { data: r, error: e2 } = await db
+    .from("resumes")
+    .insert({
+      user_id: userId, name: resume.name, experience_level: resume.experienceLevel, language: resume.language,
+      template_id: resume.templateId, settings: resume.settings, content: resume.content,
+    })
+    .select("id")
+    .single();
+  if (e2) throw e2;
+  const { error: e3 } = await db.from("target_jobs").insert({
+    resume_id: r.id, user_id: userId, title: target.title, company: target.company, description: target.description,
+    keywords: target.keywords, extracted_at: now, extraction_model: "seed",
+  });
+  if (e3) throw e3;
+  console.log("Seeded Supabase: demo user (see scripts/seed.mjs, email already confirmed) with 1 resume.");
+}
+
+async function findUser(db, email) {
+  for (let page = 1; page < 50; page++) {
+    const { data, error } = await db.auth.admin.listUsers({ page, perPage: 200 });
+    if (error) throw error;
+    const u = data.users.find((x) => x.email === email);
+    if (u || data.users.length < 200) return u ?? null;
+  }
+  return null;
+}

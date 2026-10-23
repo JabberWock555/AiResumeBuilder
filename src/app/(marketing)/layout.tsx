@@ -54,6 +54,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
           <span>Resume builder</span>
           <Link href="/templates" className="hover:text-text">Templates</Link>
           <Link href="/pricing" className="hover:text-text">Pricing</Link>
+          <Link href="/privacy" className="hover:text-text">Privacy</Link>
         </div>
       </footer>
     </div>

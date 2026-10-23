@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 // End-to-end walkthrough of the core loop against the local dev server, with
-// local Chrome. Signs up a fresh test account, builds a resume, tailors it,
-// downloads the PDF, hits the free limits, and saves screenshots for
-// /replica-diff into replica/clone-screens/. Also collects console errors,
-// axe violations and horizontal overflow at phone width.
+// local Chrome. Signs up a fresh test account (confirming it through the
+// emailed link), builds a resume, tailors it, downloads the PDF, hits the free
+// limits, checks a second user can't reach the first one's resume, changes
+// email and password through emailed links, signs out everywhere, deletes the
+// account, and saves screenshots for /replica-diff into replica/clone-screens/.
+// Also collects console errors, axe violations and sideways scroll at phone width.
 //
-//   npm run dev            (in another terminal)
+//   npm run dev            (in another terminal, with no Supabase/Resend keys)
 //   npm run walkthrough
 //
-// The test account it creates lives only in the local .data/db.json.
+// It reads emails from .data/outbox.jsonl, so it runs on the local stand-ins.
+// The test accounts it creates live only in the local .data/db.json.
 
 import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -34,6 +37,7 @@ const ok = (name, pass, detail = "") => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 await mkdir(OUT, { recursive: true });
+await rm(path.join(OUT, "_crash.png"), { force: true });
 await rm(DL, { recursive: true, force: true });
 await mkdir(DL, { recursive: true });
 
@@ -41,7 +45,9 @@ const browser = await puppeteer.launch({ executablePath: CHROME, headless: true,
 const page = await browser.newPage();
 await page.emulateMediaFeatures([{ name: "prefers-color-scheme", value: "light" }]);
 await page.setViewport({ width: 1440, height: 900 });
-page.on("console", (m) => m.type() === "error" && !(quotaTest && m.text().includes("402")) && problems.console.push(`${page.url()} :: ${m.text()}`));
+// Refusals the walkthrough asks for on purpose (quota, wrong password, rate limit) aren't errors.
+let expectRefusals = false;
+page.on("console", (m) => m.type() === "error" && !(quotaTest && m.text().includes("402")) && !(expectRefusals && /status of 40[013]|status of 429/.test(m.text())) && problems.console.push(`${page.url()} :: ${m.text()}`));
 page.on("pageerror", (e) => problems.console.push(`${page.url()} :: ${e.message}`));
 const cdp = await page.createCDPSession();
 await cdp.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: DL });
@@ -65,6 +71,38 @@ const fill = async (sel, text) => {
   await el.click({ count: 3 });
   await el.type(text);
 };
+/** The link in the newest email of a kind to an address, from the local outbox. */
+async function emailLink(to, tag) {
+  for (let i = 0; i < 25; i++) {
+    const lines = (await readFile(path.join(process.cwd(), ".data", "outbox.jsonl"), "utf8").catch(() => "")).trim().split("\n").filter(Boolean);
+    const mail = lines.map((l) => JSON.parse(l)).filter((m) => m.to === to && m.tag === tag).at(-1);
+    const link = mail?.text.match(/https?:\/\/\S+\/auth\/confirm\S+/)?.[0];
+    if (link) return link;
+    await sleep(200);
+  }
+  throw new Error(`no ${tag} email for the test account`);
+}
+/** Signs up and confirms a user through the API in a fresh, separate browser context. */
+async function secondUser(label) {
+  const ctx = await browser.createBrowserContext();
+  const p = await ctx.newPage();
+  const mail = `walkthrough-${label}+${Date.now()}@example.com`;
+  const pw = randomBytes(12).toString("base64url");
+  await p.goto(BASE + "/signup", { waitUntil: "networkidle0" });
+  await p.evaluate(async (body) => fetch("/api/auth/signup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), { fullName: `Second ${label}`, email: mail, password: pw });
+  await p.goto(await emailLink(mail, "verify"), { waitUntil: "networkidle0" });
+  return { ctx, page: p, email: mail };
+}
+const api = (p, url, init = {}) =>
+  p.evaluate(
+    async (url, init) => {
+      const r = await fetch(url, { ...init, headers: init.body ? { "content-type": "application/json" } : undefined });
+      return r.status;
+    },
+    url,
+    init,
+  );
+
 async function waitSaved() {
   await page.waitForFunction(() => document.querySelector('[role="status"]')?.textContent?.includes("Saved"), { timeout: 15_000 });
 }
@@ -90,8 +128,28 @@ try {
   await fill("::-p-aria(Password)", password);
   await shot("S05-signup");
   await axe("S05-signup");
-  await Promise.all([page.waitForNavigation({ waitUntil: "networkidle0" }), click('button[type="submit"]')]);
-  ok("sign-up lands on the dashboard", page.url().endsWith("/app"), page.url());
+  await click('button[type="submit"]');
+  ok("sign-up asks to confirm the email", await page.locator("::-p-text(Check your email)").wait().then(() => true, () => false));
+  await shot("S05-check-email");
+  await axe("S05-check-email");
+
+  // Logging in before confirming says so, and offers to resend.
+  expectRefusals = true;
+  await go("/login");
+  await fill("::-p-aria(Email)", email);
+  await fill("::-p-aria(Password)", password);
+  await click('button[type="submit"]');
+  ok("log in before confirming is refused", await page.locator("::-p-text(Check your email)").wait().then(() => true, () => false));
+  expectRefusals = false;
+
+  // Signing up again with the same address gives the same answer (no account probing).
+  const again = await page.evaluate(async (body) => (await fetch("/api/auth/signup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })).status, { fullName: "X", email, password: "another-password-1" });
+  ok("sign-up with a taken email looks the same", again === 202, String(again));
+
+  await go(new URL(await emailLink(email, "verify")).pathname + new URL(await emailLink(email, "verify")).search);
+  ok("the emailed link confirms and signs in", new URL(page.url()).pathname === "/app", page.url());
+  const reused = await page.evaluate(async (u) => (await fetch(u, { redirect: "manual" })).headers.get("location") ?? (await fetch(u)).url, await emailLink(email, "verify"));
+  ok("a confirm link works only once", /\/login\?error=link/.test(reused ?? ""), reused);
 
   // ---------------------------------------------------------------- dashboard empty (S11)
   ok("S11 empty state", await page.locator("::-p-text(No resumes yet)").wait().then(() => true, () => false));
@@ -253,10 +311,75 @@ try {
   await shot("S17-upgrade");
   await page.keyboard.press("Escape");
 
+  // ---------------------------------------------------------------- a second user gets nothing
+  const resumeId = resumeUrl.split("/").at(-1);
+  const b = await secondUser("b");
+  const isolation = [
+    await api(b.page, `/api/resumes/${resumeId}`),
+    await api(b.page, `/api/resumes/${resumeId}`, { method: "PATCH", body: JSON.stringify({ revision: 1, name: "hacked" }) }),
+    await api(b.page, `/api/resumes/${resumeId}`, { method: "DELETE" }),
+    await api(b.page, "/api/exports", { method: "POST", body: JSON.stringify({ resumeId, format: "pdf", revision: 1 }) }),
+    await api(b.page, "/api/ai/summary", { method: "POST", body: JSON.stringify({ resumeId, position: "x", skills: [] }) }),
+  ];
+  ok("a second user can't read, change, delete, export or use AI on it", isolation.every((x) => x === 404), JSON.stringify(isolation));
+  await b.page.goto(BASE + resumeUrl.replace(BASE, "") + "/contact", { waitUntil: "networkidle0" });
+  ok("a second user gets 'not found' for its editor page", await b.page.locator("::-p-text(find that resume)").wait().then(() => true, () => false) || (await b.page.content()).includes("404"));
+  const listB = await b.page.evaluate(async () => (await (await fetch("/api/resumes")).json()).resumes.length);
+  ok("a second user's list is empty", listB === 0, String(listB));
+
   // ---------------------------------------------------------------- settings (S14)
   await go("/app/settings");
   await shot("S14-settings");
   await axe("S14-settings");
+
+  // Change email: nothing changes until the link sent to the new address is clicked.
+  const newEmail = `walkthrough-new+${Date.now()}@example.com`;
+  await click("button::-p-text(Change email)");
+  await fill("::-p-aria(New email)", newEmail);
+  await click('[role="dialog"] button[type="submit"]');
+  ok("change email asks to confirm the new address", await page.locator("::-p-text(Your address changes to)").wait().then(() => true, () => false));
+  await go(new URL(await emailLink(newEmail, "change_email")).pathname + new URL(await emailLink(newEmail, "change_email")).search);
+  ok("the link changes the email", await page.locator(`::-p-text(${newEmail})`).wait().then(() => true, () => false), page.url());
+
+  // Rate limits: the 11th wrong password for one address in 15 minutes is refused.
+  expectRefusals = true;
+  const tries = [];
+  const nobody = `nobody-${Date.now()}@example.com`;
+  for (let i = 0; i < 11; i++) tries.push(await api(page, "/api/auth/login", { method: "POST", body: JSON.stringify({ email: nobody, password: "wrong-password" }) }));
+  ok("login is rate limited per address", tries.at(-1) === 429 && tries.slice(0, 10).every((x) => x === 401), JSON.stringify(tries));
+
+  ok("unsigned Stripe webhooks are refused", (await api(page, "/api/webhooks/stripe", { method: "POST", body: "{}" })) === 400);
+  ok("cron jobs need the secret", (await api(page, "/api/cron/prune-logs")) === 403);
+
+  // Password reset by email, from a signed-out browser. Other sessions end.
+  const c = await browser.createBrowserContext();
+  const other = await c.newPage();
+  await other.goto(BASE + "/login", { waitUntil: "networkidle0" });
+  ok("log in with the new email", (await api(other, "/api/auth/login", { method: "POST", body: JSON.stringify({ email: newEmail, password }) })) === 200);
+  await other.goto(BASE + "/forgot-password", { waitUntil: "networkidle0" });
+  await other.locator("::-p-aria(Email)").fill(newEmail);
+  await other.locator('button[type="submit"]').click();
+  await other.locator("::-p-text(Check your email)").wait();
+  await other.goto(await emailLink(newEmail, "reset"), { waitUntil: "networkidle0" });
+  ok("the reset link opens the new-password form", new URL(other.url()).pathname === "/reset-password" && (await other.locator("::-p-text(Choose a new password)").wait().then(() => true, () => false)));
+  const newPassword = randomBytes(12).toString("base64url");
+  await other.locator("::-p-aria(New password)").fill(newPassword);
+  await Promise.all([other.waitForNavigation({ waitUntil: "networkidle0" }), other.locator('button[type="submit"]').click()]);
+  ok("saving the new password signs in", new URL(other.url()).pathname === "/app", other.url());
+  await go("/app");
+  ok("the reset signed out the other session", new URL(page.url()).pathname === "/login", page.url());
+  ok("the old password no longer works", (await api(page, "/api/auth/login", { method: "POST", body: JSON.stringify({ email: newEmail, password }) })) === 401);
+  ok("the new password works", (await api(page, "/api/auth/login", { method: "POST", body: JSON.stringify({ email: newEmail, password: newPassword }) })) === 200);
+
+  // Sign out everywhere ends the other browser's session too.
+  await go("/app/settings");
+  await click("button::-p-text(Sign out everywhere)");
+  await page.waitForFunction(() => location.pathname === "/login", { timeout: 15_000 });
+  await other.goto(BASE + "/app", { waitUntil: "networkidle0" });
+  ok("sign out everywhere ends every session", new URL(page.url()).pathname === "/login" && new URL(other.url()).pathname === "/login", `${page.url()} ${other.url()}`);
+  await c.close();
+  expectRefusals = false;
+  await api(page, "/api/auth/login", { method: "POST", body: JSON.stringify({ email: newEmail, password: newPassword }) });
 
   // ---------------------------------------------------------------- 390px
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
@@ -267,6 +390,16 @@ try {
     await shot(`${id}-390`);
   }
   ok("no sideways scrolling at 390px", problems.overflow.length === 0, problems.overflow.join("; "));
+
+  // ---------------------------------------------------------------- delete account
+  await page.setViewport({ width: 1440, height: 900 });
+  const del = await api(page, "/api/me", { method: "DELETE", body: JSON.stringify({ confirmEmail: newEmail }) });
+  ok("delete account", del === 204, String(del));
+  expectRefusals = true;
+  ok("a deleted account can't log in", (await api(page, "/api/auth/login", { method: "POST", body: JSON.stringify({ email: newEmail, password: newPassword }) })) === 401);
+  const leftovers = JSON.parse(await readFile(path.join(process.cwd(), ".data", "db.json"), "utf8"));
+  ok("nothing of the deleted account is left", !JSON.stringify(leftovers).includes(resumeId), resumeId);
+  await b.ctx.close();
 } catch (e) {
   ok("walkthrough finished without crashing", false, e.message);
   await page.screenshot({ path: path.join(OUT, "_crash.png") }).catch(() => {});

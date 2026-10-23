@@ -1,18 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useSyncExternalStore } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/layout";
 import { Field, Input } from "@/components/ui/field";
 import { SegmentedControl } from "@/components/ui/tabs";
 import { Dialog, DialogContent, useToast } from "@/components/ui/overlays";
-import { api, errorMessage } from "@/lib/api";
+import { ApiError, api, errorMessage } from "@/lib/api";
 import type { Usage, User } from "@/server/repo/types";
 import { UsageBox } from "./app-sidebar";
-import { useUpgrade } from "./upgrade";
+import { BillingCard, type BillingView } from "./billing";
 
 type Theme = "system" | "light" | "dark";
 function subscribeTheme(cb: () => void) {
@@ -34,10 +33,92 @@ function Row({ title, body, children }: { title: string; body?: React.ReactNode;
   );
 }
 
-export function SettingsForms({ user, usage }: { user: User; usage: Usage }) {
+/** One-off messages for where the user came back from: Stripe, or an email link. */
+function useArrivalToast() {
+  const params = useSearchParams();
   const router = useRouter();
   const toast = useToast();
-  const upgrade = useUpgrade();
+  const billing = params.get("billing");
+  const email = params.get("email");
+  useEffect(() => {
+    if (billing === "success") {
+      toast({ tone: "success", title: "Payment received. Thanks for going Pro." });
+      // The plan is set by Stripe's webhook, a moment after the redirect.
+      const t = setTimeout(() => router.refresh(), 2500);
+      router.replace("/app/settings", { scroll: false });
+      return () => clearTimeout(t);
+    }
+    if (email === "changed") {
+      toast({ tone: "success", title: "Email changed. Use the new one to log in." });
+      router.replace("/app/settings", { scroll: false });
+    }
+  }, [billing, email, router, toast]);
+}
+
+function ChangeEmail({ current }: { current: string }) {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError("Enter an email address like name@example.com.");
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api("/api/me/email", { body: { email: email.trim() } });
+      setOpen(false);
+      toast({ tone: "success", title: `Check your email. Your address changes to ${email.trim()} once you confirm.` });
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.code === "email_taken"
+          ? "Another account already uses that email."
+          : err instanceof ApiError && err.code === "same_email"
+            ? "That’s already your email."
+            : errorMessage(err),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Row title="Email" body={current}>
+      <Button variant="secondary" onClick={() => (setEmail(""), setError(undefined), setOpen(true))}>
+        Change email
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent
+          title="Change your email"
+          description="We’ll email you a link to confirm. Nothing changes until you click it."
+          className="max-w-[440px]"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" form="change-email" loading={busy}>
+                Send link
+              </Button>
+            </>
+          }
+        >
+          <form id="change-email" onSubmit={submit} noValidate>
+            <Field label="New email" error={error}>
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" maxLength={160} autoFocus />
+            </Field>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </Row>
+  );
+}
+
+export function SettingsForms({ user, usage, billing }: { user: User; usage: Usage; billing: BillingView }) {
+  const router = useRouter();
+  const toast = useToast();
+  useArrivalToast();
+  const [signingOut, setSigningOut] = useState(false);
   const theme = useSyncExternalStore(subscribeTheme, readTheme, () => "system" as Theme);
   const [name, setName] = useState(user.fullName);
   const [saving, setSaving] = useState(false);
@@ -99,10 +180,29 @@ export function SettingsForms({ user, usage }: { user: User; usage: Usage }) {
             Save name
           </Button>
         </form>
-        <Row title="Email" body={user.email} />
-        <Row title="Password" body="We’ll email you a link to choose a new one.">
+        <ChangeEmail current={user.email} />
+        <Row title="Password" body="Choose a new one. Other devices are signed out when you do.">
           <Button asChild variant="secondary">
-            <Link href="/forgot-password">Change password</Link>
+            <Link href="/reset-password">Change password</Link>
+          </Button>
+        </Row>
+        <Row title="Sign out everywhere" body="Ends every session on every device, including this one. Useful if you used a shared computer.">
+          <Button
+            variant="secondary"
+            loading={signingOut}
+            onClick={async () => {
+              setSigningOut(true);
+              try {
+                await api("/api/auth/logout", { body: { everywhere: true } });
+                router.push("/login");
+                router.refresh();
+              } catch (e) {
+                toast({ tone: "error", title: errorMessage(e) });
+                setSigningOut(false);
+              }
+            }}
+          >
+            Sign out everywhere
           </Button>
         </Row>
       </Card>
@@ -123,14 +223,9 @@ export function SettingsForms({ user, usage }: { user: User; usage: Usage }) {
         </Row>
       </Card>
 
-      <Card>
+      <Card id="billing" className="scroll-mt-20">
         <h2 className="text-lg text-text">Plan</h2>
-        <Row
-          title={user.plan === "free" ? "Free plan" : "Pro"}
-          body={user.plan === "free" ? "One resume, 10 AI suggestions and 3 PDF downloads." : "Thanks for supporting us."}
-        >
-          {user.plan === "free" ? <Button onClick={() => upgrade()}>See Pro</Button> : <Badge tone="pro">Active</Badge>}
-        </Row>
+        <BillingCard billing={billing} />
         <div className="max-w-sm pt-2">
           <UsageBox usage={usage} />
         </div>

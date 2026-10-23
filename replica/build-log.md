@@ -1,9 +1,9 @@
 # Build log
 
-Data layer: **fake** (`src/server/repo/fake.ts`, a local JSON file at
-`.data/db.json`) behind the same interface Supabase will implement
-(`src/server/repo/types.ts`). AI: **demo writer** (`src/lib/ai/demo.ts`),
-deterministic, never invents facts. Both are swapped in `/replica-backend`.
+Data layer: Supabase when its keys are set, otherwise the local JSON file
+(`.data/db.json`) behind the same interfaces. AI: the AI Gateway when its key
+is set, otherwise the deterministic demo writer. Payments, email, OAuth and
+jobs: see `replica/backend.md`.
 
 Run it: `npm run seed -- --reset` (demo login is in `scripts/seed.mjs`),
 `npm run dev`, then `npm run walkthrough` for the end-to-end check.
@@ -14,15 +14,15 @@ Run it: `npm run seed -- --reset` (demo login is in `scripts/seed.mjs`),
 | S02 pricing | 2026-10-06 | partial | prices; plan structure only | — |
 | S03 ATS checker | 2026-10-06 | stub | needs file import | — |
 | S04 templates | 2026-10-06 | done | — | — |
-| S05 sign up | 2026-10-06 | done | Google and Apple sign-in (need real auth) | — |
-| S06 log in, forgot, reset | 2026-10-06 | done | reset email (link goes to the dev log) | — |
+| S05 sign up | 2026-10-13 | done | Google and Apple run once your OAuth clients are in Supabase | email confirmation before first sign-in added a "check your email" state |
+| S06 log in, forgot, reset | 2026-10-13 | done | — | reset now signs in through the emailed link and signs out other devices |
 | S07-S09 onboarding | — | not built | should-have | — |
 | S10 discount offer | — | won't build | no countdown timers by design | — |
 | S11 dashboard | 2026-10-06 | done | folders, import by drop | live thumbnails needed a scaled page component |
 | S12 create resume | 2026-10-06 | done | import, language | — |
 | S13 account menu | 2026-10-06 | done | — | — |
-| S14 settings | 2026-10-06 | partial | change email, notifications, matching (S15, S16) | — |
-| S17 upgrade dialog | 2026-10-06 | partial | payments (says so in the dialog) | — |
+| S14 settings | 2026-10-13 | partial | notifications, matching (S15, S16) | change email, sign out everywhere, plan card with one-click cancel added |
+| S17 upgrade dialog | 2026-10-13 | done | runs once Stripe test keys are set | prices come from Stripe |
 | S18 contact | 2026-10-06 | done | — | country list from `Intl.DisplayNames` instead of a hand list |
 | S19 experience | 2026-10-06 | done | mouse drag reorder | fast typing after Enter landed in the old bullet: fixed by rendering the new row synchronously |
 | S20 education | 2026-10-06 | done | — | — |

@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "web-webhook-test",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": ["STRIPE_WEBHOOK_SECRET=whsec_local_webhook_check_only", "npm", "run", "dev"],
+      "port": 3000
     }
   ]
 }

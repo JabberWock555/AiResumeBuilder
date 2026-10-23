@@ -13,7 +13,7 @@ Reads `replica/recon.md` (screens S01-S36, flows F01-F10) and
 | database | Postgres on Supabase | RLS gives per-user access rules in the database itself; storage and auth come with it |
 | data access | supabase-js with generated types, SQL migrations | the content is one jsonb document, so an ORM adds little; RLS needs the user's own client anyway |
 | auth | Supabase Auth: email + password, Google, later Apple | covers S05/S06 and password reset; no separate auth vendor |
-| AI | AI SDK through the Vercel AI Gateway: Claude Haiku 4.5 for inline bullet completion, Claude Sonnet 5.5 for summaries, keyword bullets, job-ad keyword extraction and import parsing | fast and cheap where it runs on every click, stronger where accuracy matters; the gateway gives fallbacks and cost tracking. Confirm the gateway's model slugs when wiring it up |
+| AI | AI SDK through the Vercel AI Gateway: Claude Haiku 4.5 for inline bullet completion, Claude Sonnet 5.5 for summaries, keyword bullets, job-ad keyword extraction and import parsing | fast and cheap where it runs on every click, stronger where accuracy matters; the gateway gives fallbacks and cost tracking. Slugs checked: `anthropic/claude-haiku-4.5`, `anthropic/claude-sonnet-5.5` (no Haiku 5.x on the gateway) |
 | PDF | HTML/CSS templates printed by headless Chromium (`puppeteer-core` + `@sparticuz/chromium`) in a Node function | the preview and the PDF are the same HTML, so they match, and the PDF has a real text layer for ATS |
 | DOCX | `docx` npm package, built from the same document | Word users need an editable file; it follows the template's structure, not pixel for pixel |
 | file parsing | `unpdf` (PDF text), `mammoth` (DOCX text), then the LLM into the zod schema | standard libraries; the LLM only maps text to fields |
@@ -94,7 +94,7 @@ Tables: 12 (`profiles`, `subscriptions`, `stripe_events`, `plan_limits`,
 `usage_counters`, `folders`, `resumes`, `resume_versions`, `target_jobs`,
 `ai_generations`, `exports`, `imports`) plus 2 storage buckets.
 Access rules: **Postgres row level security on every table.** The full SQL is
-in `replica/schema.sql`.
+in `supabase/migrations/` (`0001_init.sql`, `0002_backend.sql`).
 
 Decisions worth knowing:
 
@@ -118,7 +118,7 @@ Decisions worth knowing:
 - **Deleting the auth user cascades everything.** Storage files and the
   Stripe customer are removed by the delete-account route.
 
-`replica/schema.test.mjs` applies the schema to an in-memory Postgres (PGlite)
+`supabase/schema.test.mjs` applies the migrations to an in-memory Postgres (PGlite)
 and checks 22 rules: RLS between two users, quotas, refunds, column grants,
 folder ownership, cascades. **22 of 22 pass.**
 
@@ -144,7 +144,7 @@ Route handlers under `app/api`. All require a signed-in user unless marked.
 | PUT /api/resumes/:id/target | set or replace the job ad, extract keywords (free, rate-limited) | owner | `{title, company?, description}` | `{keywords}` | F03 |
 | DELETE /api/resumes/:id/target | remove targeting | owner | — | 204 | F03 |
 | POST /api/resumes/:id/target/dismiss | "No, not relevant" for a keyword | owner | `{term}` | 200 | F03 |
-| POST /api/ai/bullet | suggest, complete, quantify or rewrite a bullet (streams) | owner | `{resumeId, entryId, bulletId?, mode}` | text stream + `{placeholders, creditsLeft}` | F01 F04 |
+| POST /api/ai/bullet | suggest, complete, quantify or rewrite a bullet (JSON, not streamed: the fact guard needs the whole answer) | owner | `{resumeId, entryId, bulletId?, text, mode}` | `{text, placeholders, model, creditsLeft}` | F01 F04 |
 | POST /api/ai/summary | write a summary from position and skills (streams) | owner | `{resumeId, position, skills}` | text stream | F01 |
 | POST /api/ai/keyword-bullet | write one bullet using a missing keyword, picking the best role | owner | `{resumeId, term, entryId?}` | `{entryId, text, placeholders}` | F03 |
 | POST /api/ai/skills | suggest skills for a category (could) | owner | `{resumeId, category, description}` | `{skills[]}` | F01 |
@@ -182,7 +182,7 @@ lifetime), `customer.subscription.updated`, `customer.subscription.deleted`,
 | prune-versions | daily 03:00 | keep the last 50 versions per resume, plus all from the last 7 days |
 | cleanup-imports | hourly | delete uploaded files parsed or older than 24 hours (privacy) |
 | reconcile-billing | daily 04:00 | compare subscriptions changed in Stripe in the last 48h with the database, fix drift from missed webhooks |
-| prune-ai-logs | weekly, Sunday 05:00 | delete `ai_generations` rows older than 180 days |
+| prune-logs | weekly, Sunday 05:00 | delete `ai_generations` rows older than 180 days, old rate-limit windows, processed Stripe events and job runs |
 
 Total: 29 routes + 4 cron routes.
 
