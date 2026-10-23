@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { AuthError, ConflictError, InputError, NotFoundError, QuotaError } from "./errors";
+import { AuthError, ConflictError, InputError, NotFoundError, QuotaError, RateLimitError } from "./errors";
 
 /** Wraps a route handler: maps our errors to status codes and JSON bodies. */
 export function handle<A extends unknown[]>(fn: (...args: A) => Promise<Response>) {
@@ -13,6 +13,8 @@ export function handle<A extends unknown[]>(fn: (...args: A) => Promise<Response
       if (e instanceof ConflictError) return Response.json({ error: "conflict", current: e.current }, { status: 409 });
       if (e instanceof NotFoundError) return Response.json({ error: e.message }, { status: 404 });
       if (e instanceof InputError) return Response.json({ error: "invalid_input", issues: e.issues }, { status: 400 });
+      if (e instanceof RateLimitError)
+        return Response.json({ error: "rate_limited" }, { status: 429, headers: { "retry-after": String(e.retryAfterSeconds) } });
       console.error(e);
       return Response.json({ error: "server_error" }, { status: 500 });
     }

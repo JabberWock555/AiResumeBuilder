@@ -1,6 +1,6 @@
 // The data layer's contract. Screens and routes only talk to this.
-// Today it's backed by a local JSON file (fake.ts). /replica-backend swaps in
-// Supabase behind the same signatures (replica/schema.sql), so no screen changes.
+// Two implementations: Supabase (supabase.ts, supabase/migrations) when its
+// keys are set, and a local JSON file (fake.ts) for development without keys.
 
 import type { Keyword } from "@/lib/score/keywords";
 import type { ExperienceLevel, ResumeContent, ResumeSettings, TemplateId } from "@/lib/resume/schema";
@@ -62,7 +62,6 @@ export type ResumePatch = Partial<Pick<Resume, "content" | "settings" | "templat
 export interface Repo {
   getUser(userId: string): Promise<User | null>;
   updateUser(userId: string, patch: Partial<Pick<User, "fullName" | "theme" | "appLanguage" | "onboarding">>): Promise<User>;
-  deleteUser(userId: string): Promise<void>;
 
   usage(userId: string): Promise<Usage>;
   /** Spends one unit; returns units left (null = unlimited). Throws QuotaError. */
@@ -71,6 +70,8 @@ export interface Repo {
 
   listResumes(userId: string, sort: "created" | "updated" | "name"): Promise<ResumeSummary[]>;
   getResume(userId: string, id: string): Promise<Resume | null>;
+  /** For the print page, which has a signed token instead of a session. */
+  getResumeForPrint(userId: string, id: string): Promise<Resume | null>;
   createResume(
     userId: string,
     input: { name: string; experienceLevel: ExperienceLevel; language: string; content?: ResumeContent; source?: Resume["source"] },
@@ -88,16 +89,53 @@ export interface Repo {
   /** Records an export. `fresh` is false when this exact revision was exported before. */
   recordExport(userId: string, resumeId: string, format: "pdf" | "docx", revision: number, templateId: string): Promise<{ fresh: boolean }>;
   wasExported(userId: string, resumeId: string, format: "pdf" | "docx", revision: number): Promise<boolean>;
-  logAi(userId: string, entry: { resumeId: string | null; kind: string; model: string; counted: boolean; status: "ok" | "error" | "refunded" }): Promise<void>;
+  logAi(userId: string, entry: AiLog): Promise<void>;
 }
 
-/** Dev-only auth, replaced by Supabase Auth in /replica-backend. */
-export interface AuthStore {
-  createUser(email: string, password: string, fullName: string): Promise<User>;
-  verifyPassword(email: string, password: string): Promise<User | null>;
-  createSession(userId: string): Promise<{ token: string; expiresAt: string }>;
-  sessionUser(token: string): Promise<User | null>;
-  deleteSession(token: string): Promise<void>;
-  createResetToken(email: string): Promise<string | null>;
-  resetPassword(token: string, password: string): Promise<boolean>;
+export type AiLog = {
+  resumeId: string | null;
+  kind: string;
+  model: string;
+  counted: boolean;
+  status: "ok" | "error" | "refunded";
+  inputTokens?: number;
+  outputTokens?: number;
+};
+
+export type Subscription = {
+  kind: "month" | "quarter" | "lifetime";
+  status: "active" | "trialing" | "past_due" | "canceled" | "incomplete" | "unpaid" | "refunded";
+  stripeSubscriptionId: string | null;
+  stripeCheckoutSessionId: string | null;
+  stripePaymentIntentId: string | null;
+  stripePriceId: string | null;
+  amountCents: number;
+  currency: string;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+};
+
+/** Billing state, written only by the Stripe webhook and the reconcile job. */
+export interface BillingStore {
+  account(userId: string): Promise<{ plan: Plan; stripeCustomerId: string | null; subscriptions: Subscription[] }>;
+  setCustomer(userId: string, customerId: string): Promise<void>;
+  userByCustomer(customerId: string): Promise<string | null>;
+  /** Records a webhook event id. "done" means it was already processed: skip it. */
+  claimEvent(id: string, type: string): Promise<"new" | "retry" | "done">;
+  finishEvent(id: string): Promise<void>;
+  /** Inserts or updates by Stripe id, then recomputes the user's plan and returns it. */
+  upsertSubscription(userId: string, s: Subscription): Promise<Plan>;
+  /** Marks a lifetime purchase refunded; returns the user id, if any. */
+  refundLifetime(paymentIntentId: string): Promise<string | null>;
+}
+
+/** Rate limits, AI call counts and the scheduled jobs. */
+export interface Ops {
+  /** Counts one hit; false when over `max` in the current window. */
+  rateLimit(key: string, max: number, windowSeconds: number): Promise<boolean>;
+  aiCallsSince(userId: string, since: Date): Promise<number>;
+  recordJob(run: { job: string; status: "ok" | "dead"; attempts: number; result?: unknown; error?: string; startedAt: Date }): Promise<void>;
+  pruneVersions(): Promise<number>;
+  pruneAiLogs(): Promise<number>;
+  pruneHousekeeping(): Promise<unknown>;
 }

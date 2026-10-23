@@ -3,7 +3,9 @@ import { repo } from "@/server/repo";
 import { assertSameOrigin, body, handle } from "@/server/http";
 import { requireUser } from "@/server/session";
 import { experienceLevel } from "@/lib/resume/schema";
-import { extractKeywords } from "@/lib/score/keywords";
+import { keywordsForTarget } from "@/server/ai/keywords";
+
+export const maxDuration = 30;
 
 const createInput = z.object({
   name: z.string().trim().min(1).max(120),
@@ -31,12 +33,7 @@ export const POST = handle(async (req: Request) => {
   const input = await body(req, createInput);
   const resume = await repo.createResume(user.id, input);
   if (input.target) {
-    await repo.setTarget(user.id, resume.id, {
-      ...input.target,
-      keywords: extractKeywords(input.target.description),
-      extractedAt: new Date().toISOString(),
-      extractionModel: "rules",
-    });
+    await repo.setTarget(user.id, resume.id, { ...input.target, ...(await keywordsForTarget(user.id, resume.id, input.target.description)) });
   }
   return Response.json({ id: resume.id }, { status: 201 });
 });

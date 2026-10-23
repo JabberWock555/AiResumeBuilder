@@ -2,7 +2,10 @@ import { z } from "zod";
 import { repo } from "@/server/repo";
 import { assertSameOrigin, body, handle } from "@/server/http";
 import { requireUser } from "@/server/session";
-import { extractKeywords } from "@/lib/score/keywords";
+import { NotFoundError } from "@/server/errors";
+import { keywordsForTarget } from "@/server/ai/keywords";
+
+export const maxDuration = 30;
 
 const input = z.object({
   title: z.string().trim().min(1).max(120),
@@ -15,13 +18,8 @@ export const PUT = handle(async (req: Request, ctx: RouteContext<"/api/resumes/[
   const user = await requireUser();
   const { id } = await ctx.params;
   const t = await body(req, input);
-  // Rule-based extraction for now; /replica-backend switches this to the AI extractor.
-  const target = await repo.setTarget(user.id, id, {
-    ...t,
-    keywords: extractKeywords(t.description),
-    extractedAt: new Date().toISOString(),
-    extractionModel: "rules",
-  });
+  if (!(await repo.getResume(user.id, id))) throw new NotFoundError("resume_not_found");
+  const target = await repo.setTarget(user.id, id, { ...t, ...(await keywordsForTarget(user.id, id, t.description)) });
   return Response.json({ target });
 });
 

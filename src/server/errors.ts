@@ -23,3 +23,8 @@ export class InputError extends Error {
     super("invalid_input");
   }
 }
+export class RateLimitError extends Error {
+  constructor(public retryAfterSeconds: number) {
+    super("rate_limited");
+  }
+}

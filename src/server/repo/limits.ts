@@ -1,6 +1,6 @@
 import type { Plan, QuotaKind } from "./types";
 
-// Mirrors the plan_limits rows in replica/schema.sql. Keep the two in step.
+// Mirrors the plan_limits rows in supabase/migrations/0001_init.sql. Keep the two in step.
 export const PLAN_LIMITS: Record<Plan, Record<"resume" | QuotaKind, { max: number | null; period: "count" | "lifetime" | "month" }>> = {
   free: {
     resume: { max: 1, period: "count" },

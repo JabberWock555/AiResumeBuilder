@@ -38,6 +38,10 @@ export function errorMessage(e: unknown): string {
         return "This resume changed somewhere else.";
       case "invalid_input":
         return "Some details need fixing.";
+      case "rate_limited":
+        return "Too many tries in a short time. Wait a few minutes and try again.";
+      case "billing_off":
+        return "Payments aren't switched on yet.";
       default:
         return "Something went wrong. Try again.";
     }
