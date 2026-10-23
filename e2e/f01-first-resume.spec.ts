@@ -160,6 +160,9 @@ test.describe("F01 first resume to PDF", () => {
     await newUser(page);
     const id = await createResume(page.request, baseURL(page));
     await page.goto(`/app/resume/${id}/contact`);
+    // Let the editor finish loading before the connection drops.
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("img", { name: /preview/i }).or(page.getByLabel("Full name"))).toBeVisible();
     await context.setOffline(true);
     await page.getByLabel("City").fill("Offline City");
     await expect(page.getByRole("status").filter({ hasText: "Not saved" })).toBeVisible({ timeout: 15_000 });
@@ -174,6 +177,9 @@ test.describe("F01 first resume to PDF", () => {
     await newUser(page);
     const id = await createResume(page.request, baseURL(page));
     await page.goto(`/app/resume/${id}/contact`);
+    // Let the editor finish loading before the connection drops.
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("img", { name: /preview/i }).or(page.getByLabel("Full name"))).toBeVisible();
     // The connection drops: every save fails.
     await page.route("**/api/resumes/*", (r) => (r.request().method() === "PATCH" ? r.abort("internetdisconnected") : r.continue()));
     await page.getByLabel("City").fill("Kept on this device");
@@ -192,6 +198,9 @@ test.describe("F01 first resume to PDF", () => {
     await newUser(page);
     const id = await createResume(page.request, baseURL(page));
     await page.goto(`/app/resume/${id}/contact`);
+    // Let the editor finish loading before the connection drops.
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("img", { name: /preview/i }).or(page.getByLabel("Full name"))).toBeVisible();
     await context.clearCookies();
     await page.getByLabel("City").fill("After expiry");
     await expect(page.getByText(/signed out|log in again/i).first()).toBeVisible({ timeout: 15_000 });
