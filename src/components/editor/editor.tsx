@@ -250,7 +250,10 @@ export function Editor({
               {tab !== "finish" && (
                 <Button asChild size="sm" variant="secondary">
                   <Link href={`${base}/finish`}>
-                    <Eye aria-hidden className="size-4" /> Preview<span className="hidden sm:inline">&nbsp;and download</span>
+                    <Eye aria-hidden className="size-4" />
+                    <span>
+                      Preview<span className="hidden sm:inline"> and download</span>
+                    </span>
                   </Link>
                 </Button>
               )}

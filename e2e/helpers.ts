@@ -52,6 +52,8 @@ export const test = base.extend<Fixtures>({
       expect(res.status()).toBe(202);
       await page.goto(await emailLink(email, "verify"));
       await expect(page).toHaveURL(/\/app(\?|$)/);
+      // Clicks before the page has hydrated do nothing; wait until it has.
+      await page.waitForLoadState("networkidle");
       return { email, password, name };
     });
   },
