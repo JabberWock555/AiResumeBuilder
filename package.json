@@ -14,7 +14,8 @@
     "test": "vitest run",
     "db:migrate": "node scripts/migrate.mjs",
     "check:supabase": "node scripts/check-supabase.mjs",
-    "webhook:check": "node scripts/webhook-check.mjs"
+    "webhook:check": "node scripts/webhook-check.mjs",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
@@ -39,7 +40,9 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@electric-sql/pglite": "^0.5.8",
+    "@playwright/test": "1.64.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^22.20.5",
     "@types/react": "^19",
@@ -51,5 +54,8 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "5.0.2"
+  },
+  "overrides": {
+    "playwright-core": "1.64.0"
   }
 }
