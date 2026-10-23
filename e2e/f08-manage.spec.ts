@@ -53,6 +53,9 @@ test.describe("F08 manage resumes", () => {
 
   test("F08-N1 a deleted resume is gone everywhere: editor, API, export", async ({ page, allow, newUser }) => {
     allow(/status of 404/);
+    // Development-only message from Next when it renders a not-found page from a layout;
+    // the production build doesn't log it (checked with `next start`).
+    allow(/Encountered a script tag while rendering React component/);
     await newUser(page);
     const id = await createResume(page.request, baseURL(page));
     expect((await page.request.delete(`/api/resumes/${id}`)).status()).toBe(204);
