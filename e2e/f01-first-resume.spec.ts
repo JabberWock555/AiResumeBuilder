@@ -195,7 +195,7 @@ test.describe("F01 first resume to PDF", () => {
 
   test("F01-E10 expired session while editing says so and keeps the edit", async ({ page, context, allow, newUser }) => {
     allow(/status of 401/);
-    await newUser(page);
+    const { email, password } = await newUser(page);
     const id = await createResume(page.request, baseURL(page));
     await page.goto(`/app/resume/${id}/contact`);
     // Let the editor finish loading before the connection drops.
@@ -203,7 +203,13 @@ test.describe("F01 first resume to PDF", () => {
     await expect(page.getByRole("img", { name: /preview/i }).or(page.getByLabel("Full name"))).toBeVisible();
     await context.clearCookies();
     await page.getByLabel("City").fill("After expiry");
-    await expect(page.getByText(/signed out|log in again/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("dialog", { name: "You’ve been signed out" })).toBeVisible({ timeout: 15_000 });
+    // Log in again (as the "new tab" would), then come back and save.
+    expect((await page.request.post("/api/auth/login", { data: { email, password } })).status()).toBe(200);
+    await page.getByRole("button", { name: "I’ve logged in, save now" }).click();
+    await saved(page);
+    const got = await (await page.request.get(`/api/resumes/${id}`)).json();
+    expect(got.resume.content.contact.city).toBe("After expiry");
   });
 
   test("F01-E11 unknown editor section redirects once, no loop", async ({ page, newUser }) => {

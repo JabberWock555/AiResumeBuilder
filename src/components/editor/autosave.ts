@@ -4,7 +4,38 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import type { ResumePatch } from "@/server/repo/types";
 
-export type SaveStatus = "saved" | "unsaved" | "saving" | "offline" | "conflict";
+export type SaveStatus = "saved" | "unsaved" | "saving" | "offline" | "conflict" | "signed_out";
+
+// Edits that couldn't be saved are kept on this device until they are, so
+// closing the tab while offline (or a crash) doesn't lose them.
+type Draft = { baseRevision: number; patch: ResumePatch; at: string };
+const draftKey = (resumeId: string) => `resume-draft:${resumeId}`;
+
+function writeDraft(resumeId: string, d: Draft | null) {
+  try {
+    if (d) localStorage.setItem(draftKey(resumeId), JSON.stringify(d));
+    else localStorage.removeItem(draftKey(resumeId));
+  } catch {
+    // Storage full or blocked (private mode): nothing more we can do here.
+  }
+}
+
+/**
+ * Takes the unsaved edits kept on this device, if any. They come back only if
+ * the saved resume hasn't changed since; otherwise the newer saved copy wins.
+ */
+export function takeDraft(resumeId: string, serverRevision: number): { patch: ResumePatch; at: string } | "stale" | null {
+  let d: Draft | null = null;
+  try {
+    d = JSON.parse(localStorage.getItem(draftKey(resumeId)) ?? "null");
+  } catch {}
+  if (!d?.patch) return null;
+  if (d.baseRevision !== serverRevision) {
+    writeDraft(resumeId, null);
+    return "stale";
+  }
+  return { patch: d.patch, at: d.at };
+}
 
 /**
  * Debounced autosave with optimistic concurrency. Patches merge while a save
@@ -33,11 +64,15 @@ export function useAutosave(resumeId: string, initialRevision: number, delay = 8
             body: { revision: revision.current, ...patch },
           });
           revision.current = r.revision;
+          if (!pending.current) writeDraft(resumeId, null);
           setStatus(pending.current ? "unsaved" : "saved");
         } catch (e) {
-          // Put the patch back (newer edits win) so nothing is lost.
+          // Put the patch back (newer edits win) so nothing is lost, here and on disk.
           pending.current = { ...patch, ...(pending.current ?? {}) };
-          setStatus(e instanceof ApiError && e.status === 409 ? "conflict" : "offline");
+          writeDraft(resumeId, { baseRevision: revision.current, patch: pending.current, at: new Date().toISOString() });
+          setStatus(
+            e instanceof ApiError && e.status === 409 ? "conflict" : e instanceof ApiError && e.status === 401 ? "signed_out" : "offline",
+          );
           throw e;
         }
       })();
@@ -78,12 +113,28 @@ export function useAutosave(resumeId: string, initialRevision: number, delay = 8
     [run],
   );
 
-  // Retry when the connection comes back.
+  // Retry when the connection comes back, or when the tab is shown again
+  // (the user may have logged back in from another tab).
   useEffect(() => {
-    const online = () => pending.current && run().catch(() => {});
-    window.addEventListener("online", online);
-    return () => window.removeEventListener("online", online);
+    const retry = () => pending.current && !document.hidden && run().catch(() => {});
+    window.addEventListener("online", retry);
+    document.addEventListener("visibilitychange", retry);
+    window.addEventListener("focus", retry);
+    return () => {
+      window.removeEventListener("online", retry);
+      document.removeEventListener("visibilitychange", retry);
+      window.removeEventListener("focus", retry);
+    };
   }, [run]);
+
+  // Keep what's still unsaved on this device when the tab goes away.
+  useEffect(() => {
+    const keep = () => {
+      if (pending.current) writeDraft(resumeId, { baseRevision: revision.current, patch: pending.current, at: new Date().toISOString() });
+    };
+    window.addEventListener("pagehide", keep);
+    return () => window.removeEventListener("pagehide", keep);
+  }, [resumeId]);
 
   // Warn before leaving with unsaved changes.
   useEffect(() => {

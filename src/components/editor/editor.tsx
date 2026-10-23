@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Check, CloudOff, Eye, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,7 @@ import {
 } from "@/lib/resume/schema";
 import { cn, focusRing } from "@/lib/cn";
 import type { Resume, TargetJob, Usage } from "@/server/repo/types";
-import { useAutosave, type SaveStatus } from "./autosave";
+import { takeDraft, useAutosave, type SaveStatus } from "./autosave";
 import { EditorContext, type EditorCtx } from "./context";
 import { ContactForm } from "./contact";
 import { ExperienceForm } from "./experience";
@@ -64,6 +64,7 @@ function SaveIndicator({ status, onRetry }: { status: SaveStatus; onRetry: () =>
     saving: { icon: <Loader2 aria-hidden className="size-4 animate-spin text-text-muted" />, text: "Saving…" },
     offline: { icon: <CloudOff aria-hidden className="size-4 text-warning" />, text: "Not saved" },
     conflict: { icon: <CloudOff aria-hidden className="size-4 text-danger" />, text: "Changed elsewhere" },
+    signed_out: { icon: <CloudOff aria-hidden className="size-4 text-danger" />, text: "Not saved: signed out" },
   }[status];
   return (
     <span className="flex items-center gap-1.5 text-xs text-text-muted" role="status" aria-live="polite">
@@ -102,6 +103,7 @@ export function Editor({
   );
   const save = useAutosave(resume.id, resume.revision);
 
+
   const report = useMemo(
     () => scoreResume(content, target ? { keywords: target.keywords, dismissed: target.dismissed } : null),
     [content, target],
@@ -138,6 +140,33 @@ export function Editor({
     },
     [queue],
   );
+  // Edits that couldn't be saved last time (offline, tab closed) come back
+  // from this device and are saved now, unless the resume changed elsewhere.
+  useEffect(() => {
+    const draft = takeDraft(resume.id, resume.revision);
+    if (draft === "stale") {
+      toast({ tone: "info", title: "Some edits made offline weren’t restored: this resume was changed somewhere else since." });
+      return;
+    }
+    if (!draft) return;
+    const p = draft.patch;
+    /* eslint-disable react-hooks/set-state-in-effect -- one-time restore from localStorage, which the server render can't see */
+    if (p.content) {
+      contentRef.current = p.content;
+      setContentState(p.content);
+    }
+    if (p.settings) {
+      settingsRef.current = p.settings;
+      setSettingsState(p.settings);
+    }
+    if (p.templateId) setTemplateState(p.templateId);
+    /* eslint-enable react-hooks/set-state-in-effect */
+    queue(p);
+    toast({ tone: "info", title: "Restored edits that hadn’t been saved." });
+    // Runs once per resume.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resume.id]);
+
   const fail = useCallback(
     (e: unknown) => {
       if (e instanceof ApiError && e.isQuota) upgrade(String(e.data.kind ?? ""));
@@ -307,6 +336,7 @@ export function Editor({
         </div>
       </div>
       <ConflictDialog status={save.status} onReload={() => window.location.reload()} />
+      <SignedOutDialog open={save.status === "signed_out"} resumeId={resume.id} onRetry={() => save.flush().catch(() => {})} />
     </EditorContext.Provider>
   );
 }
@@ -354,6 +384,35 @@ function ConflictDialog({ status, onReload }: { status: SaveStatus; onReload: ()
         onPointerDownOutside={(e) => e.preventDefault()}
       >
         <p className="text-sm text-text-muted">Reload to see the saved version. Copy anything from this tab you want to keep first.</p>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** The session ended while editing. The edits are kept; logging in elsewhere and coming back saves them. */
+function SignedOutDialog({ open, resumeId, onRetry }: { open: boolean; resumeId: string; onRetry: () => void }) {
+  const next = `/app/resume/${resumeId}`;
+  return (
+    <Dialog open={open}>
+      <DialogContent
+        title="You’ve been signed out"
+        description="Your latest edits are kept on this device and haven’t been lost. Log in again to save them."
+        footer={
+          <>
+            <Button variant="secondary" onClick={onRetry}>
+              I’ve logged in, save now
+            </Button>
+            <Button asChild>
+              <a href={`/login?next=${encodeURIComponent(next)}`} target="_blank" rel="noopener">
+                Log in again (new tab)
+              </a>
+            </Button>
+          </>
+        }
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+      >
+        <p className="text-sm text-text-muted">Keep this tab open. Once you’ve logged in, come back here and your edits are saved.</p>
       </DialogContent>
     </Dialog>
   );
