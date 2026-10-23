@@ -1,11 +1,13 @@
-// Applies schema.sql to an in-memory Postgres (PGlite) with stand-ins for
-// Supabase auth and storage, then checks the access rules and quotas.
-// Run: npm i -D @electric-sql/pglite && node replica/schema.test.mjs
+// Applies every migration in supabase/migrations to an in-memory Postgres
+// (PGlite) with stand-ins for Supabase auth and storage, then checks the
+// access rules, quotas, billing and job functions.
+// Run: npm run test:schema
 
 import { PGlite } from '@electric-sql/pglite'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 
-const schema = readFileSync(new URL('./schema.sql', import.meta.url), 'utf8')
+const dir = new URL('./migrations/', import.meta.url)
+const migrations = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()
 const db = new PGlite()
 
 // Stand-ins for what Supabase provides.
@@ -27,8 +29,8 @@ await db.exec(`
     $$ select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1] $$;
 `)
 
-await db.exec(schema)
-console.log('schema applied')
+for (const f of migrations) await db.exec(readFileSync(new URL(f, dir), 'utf8'))
+console.log(`applied ${migrations.join(', ')}`)
 
 const A = '00000000-0000-0000-0000-00000000000a'
 const B = '00000000-0000-0000-0000-00000000000b'
@@ -117,6 +119,69 @@ check('deleting a folder keeps the resume and its owner', r.rows?.[0]?.folder_id
 r = await as(A, `insert into public.exports (user_id, resume_id, format, template_id, revision)
   values ('${A}', '${resumeA}', 'pdf', 'standard', 1)`)
 check('client cannot write exports directly', !!r.error, r.error)
+
+// --- 0002: exports, refunds, plan sync, rate limits, jobs
+
+r = await as(A, `select public.record_export('${resumeA}', 'pdf', 1, 'standard') as fresh`)
+check('first export of a revision is fresh', r.rows?.[0]?.fresh === true, r.error)
+r = await as(A, `select public.record_export('${resumeA}', 'pdf', 1, 'standard') as fresh`)
+check('repeat export of the same revision is not', r.rows?.[0]?.fresh === false, r.error)
+r = await as(B, `select public.record_export('${resumeA}', 'pdf', 2, 'standard')`)
+check('user B cannot record an export on A resume', /resume_not_found/.test(r.error ?? ''), r.error)
+r = await as(B, `select id from public.exports`)
+check('user B sees none of A exports', r.rows?.length === 0, r.error)
+
+r = await as(A, `select public.refund_quota_now('${A}', 'ai_generation')`)
+check('user cannot call refund_quota_now', /permission denied/.test(r.error ?? ''), r.error)
+const month = new Date().toISOString().slice(0, 7)
+await db.exec(`select public.refund_quota_now('${A}', 'ai_generation')`)
+r = await db.query(`select used from public.usage_counters where user_id = '${A}' and kind = 'ai_generation' and period = '${month}'`)
+check('refund_quota_now refunds the paid plan monthly period', r.rows?.[0]?.used === 0, JSON.stringify(r.rows))
+
+r = await as(B, `select public.sync_plan('${B}')`)
+check('user cannot call sync_plan', /permission denied/.test(r.error ?? ''), r.error)
+r = await as(B, `insert into public.subscriptions (user_id, kind, status, amount_cents, currency) values ('${B}', 'month', 'active', 100, 'usd')`)
+check('user cannot write subscriptions', !!r.error, r.error)
+const plan = async () => (await db.query(`select public.sync_plan('${B}') as p`)).rows[0].p
+await db.exec(`insert into public.subscriptions (user_id, kind, status, stripe_subscription_id, amount_cents, currency)
+  values ('${B}', 'month', 'active', 'sub_1', 1200, 'usd')`)
+check('active monthly subscription makes Pro', (await plan()) === 'pro')
+await db.exec(`update public.subscriptions set status = 'past_due' where stripe_subscription_id = 'sub_1'`)
+check('past_due keeps Pro while Stripe retries', (await plan()) === 'pro')
+await db.exec(`update public.subscriptions set status = 'canceled' where stripe_subscription_id = 'sub_1'`)
+check('canceled subscription goes back to Free', (await plan()) === 'free')
+await db.exec(`insert into public.subscriptions (user_id, kind, status, stripe_checkout_session_id, stripe_payment_intent_id, amount_cents, currency)
+  values ('${B}', 'lifetime', 'active', 'cs_1', 'pi_1', 9900, 'usd')`)
+check('lifetime purchase makes Lifetime', (await plan()) === 'lifetime')
+r = await as(A, `select id from public.subscriptions where user_id = '${B}'`)
+check('user A cannot see B subscriptions', r.rows?.length === 0, r.error)
+r = await as(B, `select plan from public.profiles where id = '${B}'`)
+check('B reads own plan', r.rows?.[0]?.plan === 'lifetime', r.error)
+await db.exec(`update public.subscriptions set status = 'refunded' where stripe_payment_intent_id = 'pi_1'`)
+check('refunded lifetime goes back to Free', (await plan()) === 'free')
+
+r = await as(A, `select public.hit_rate_limit('x', 2, 60)`)
+check('user cannot call hit_rate_limit', /permission denied/.test(r.error ?? ''), r.error)
+const hits = []
+for (let i = 0; i < 3; i++) hits.push((await db.query(`select public.hit_rate_limit('login:abc', 2, 60) as ok`)).rows[0].ok)
+check('rate limit allows 2 then refuses the 3rd', hits.join() === 'true,true,false', hits.join())
+r = await as(A, `select * from public.rate_limits`)
+check('users see no rate limit rows', r.rows?.length === 0, r.error)
+
+await db.exec(`insert into public.ai_generations (user_id, resume_id, kind, model, counted, status, created_at)
+  values ('${A}', '${resumeA}', 'summary', 'm', true, 'ok', now() - interval '200 days'),
+         ('${A}', '${resumeA}', 'summary', 'm', true, 'ok', now())`)
+r = await db.query(`select public.prune_ai_logs() as n`)
+check('prune_ai_logs removes logs older than 180 days only', r.rows[0].n === 1, JSON.stringify(r.rows))
+await db.exec(`insert into public.resume_versions (resume_id, user_id, revision, content, settings, template_id, reason, created_at)
+  select '${resumeA}', '${A}', g, '{}', '{}', 'standard', 'autosave', now() - interval '30 days' + g * interval '1 minute'
+    from generate_series(1, 55) g`)
+r = await db.query(`select public.prune_versions() as n`)
+check('prune_versions keeps the newest 50', r.rows[0].n === 5, JSON.stringify(r.rows))
+r = await as(A, `select public.prune_versions()`)
+check('user cannot run prune jobs', /permission denied/.test(r.error ?? ''), r.error)
+r = await db.query(`select public.prune_housekeeping() as j`)
+check('prune_housekeeping runs', typeof r.rows[0].j === 'object', JSON.stringify(r.rows))
 
 await db.exec(`delete from auth.users where id = '${A}'`)
 r = await db.query(`select (select count(*) from public.resumes where user_id = '${A}')::int as resumes,

@@ -1,11 +1,11 @@
 -- Schema for the resume builder (a rebuild of Rezi's core features).
--- Target: Supabase Postgres 15+. Run as the first migration
--- (supabase/migrations/0001_init.sql).
+-- Target: Supabase Postgres 15+. The first migration; applied by
+-- `npm run db:migrate` (scripts/migrate.mjs).
 --
--- Access rules: Postgres row level security on every table. The browser and
--- the server both use the signed-in user's Supabase client, so RLS applies
--- everywhere. Only Stripe webhooks, cron jobs and account deletion use the
--- service role.
+-- Access rules: Postgres row level security on every table. The server acts
+-- with the signed-in user's Supabase client, so RLS applies to every user
+-- action. Only Stripe webhooks, cron jobs, refunds, AI logs, the print page and
+-- account deletion use the service role.
 --
 -- Resume content lives in one jsonb document per resume (validated by a zod
 -- schema in the app, see architecture.md). It keeps autosave, version history,
