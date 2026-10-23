@@ -176,7 +176,7 @@ export const MenuTrigger = DropdownMenu.Trigger;
 export const MenuSub = DropdownMenu.Sub;
 
 const menuBox =
-  "z-30 min-w-48 rounded-md border border-border bg-surface p-1 shadow-pop data-[state=open]:animate-pop-in";
+  "z-55 min-w-48 rounded-md border border-border bg-surface p-1 shadow-pop data-[state=open]:animate-pop-in";
 const menuItem =
   "flex min-h-9 cursor-default items-center gap-2.5 rounded-sm px-2.5 text-sm text-text outline-none select-none " +
   "data-[highlighted]:bg-surface-muted data-[disabled]:opacity-50";

@@ -17,8 +17,8 @@ test.describe("F01 first resume to PDF", () => {
     await dialog.getByRole("combobox", { name: "Experience level" }).click();
     await page.getByRole("option", { name: "Junior" }).click();
     await dialog.getByRole("switch", { name: "Tailor it to a job ad" }).click();
-    await dialog.getByLabel("Job title").fill("Data Analyst");
-    await dialog.getByLabel("Job ad").fill(JOB_AD);
+    await dialog.getByRole("textbox", { name: /^Job title/ }).fill("Data Analyst");
+    await dialog.getByRole("textbox", { name: /^Job ad/ }).fill(JOB_AD);
     await axe(page, "S12 create");
     await dialog.getByRole("button", { name: "Create resume" }).click();
     await expect(page).toHaveURL(/\/app\/resume\/[^/]+\/contact$/);

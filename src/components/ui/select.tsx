@@ -14,7 +14,7 @@ const trigger =
   focusRing;
 
 const menu =
-  "z-30 max-h-(--radix-select-content-available-height) min-w-(--radix-select-trigger-width) overflow-y-auto rounded-md border border-border bg-surface p-1 shadow-pop " +
+  "z-55 max-h-(--radix-select-content-available-height) min-w-(--radix-select-trigger-width) overflow-y-auto rounded-md border border-border bg-surface p-1 shadow-pop " +
   "data-[state=open]:animate-pop-in";
 
 const item =
@@ -151,7 +151,7 @@ export function Combobox({
         <Popover.Content
           align="start"
           sideOffset={4}
-          className="z-30 w-(--radix-popover-trigger-width) min-w-56 rounded-md border border-border bg-surface p-1 shadow-pop data-[state=open]:animate-pop-in"
+          className="z-55 w-(--radix-popover-trigger-width) min-w-56 rounded-md border border-border bg-surface p-1 shadow-pop data-[state=open]:animate-pop-in"
         >
           <input
             autoFocus

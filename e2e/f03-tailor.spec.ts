@@ -43,8 +43,8 @@ test.describe("F03 tailor to a job", () => {
     await page.getByRole("tab", { name: "Job match" }).click();
     await page.getByRole("button", { name: "Add a job ad" }).click();
     const d = page.getByRole("dialog");
-    await d.getByLabel("Job title").fill("Data Analyst");
-    await d.getByLabel("Job ad").fill(JOB_AD);
+    await d.getByRole("textbox", { name: /^Job title/ }).fill("Data Analyst");
+    await d.getByRole("textbox", { name: /^Job ad/ }).fill(JOB_AD);
     await d.getByRole("button", { name: "Check keywords" }).click();
     await expect(page.getByText(/Your resume has \d+ of \d+ keywords/)).toBeVisible();
   });

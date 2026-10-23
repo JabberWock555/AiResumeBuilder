@@ -192,7 +192,7 @@ export function MonthYearPicker({
         <Popover.Content
           sideOffset={4}
           align="start"
-          className="z-30 w-72 rounded-md border border-border bg-surface p-3 shadow-pop data-[state=open]:animate-pop-in"
+          className="z-55 w-72 rounded-md border border-border bg-surface p-3 shadow-pop data-[state=open]:animate-pop-in"
         >
           <div className="mb-2 flex items-center justify-between">
             <Button variant="ghost" size="sm" iconOnly aria-label="Previous year" onClick={() => setYear((y) => y - 1)}>
