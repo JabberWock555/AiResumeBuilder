@@ -213,7 +213,7 @@ Copy `.env.example` to `.env.local` and fill it in as you go.
   - The print link carries opaque ids in a 60-second signed token, fetched only by our own headless Chrome.
   - The dev reset link no longer goes to the server log.
 - [x] **Dependencies audited.**
-  - `npm audit --omit=dev`: 0 vulnerabilities, after moving `puppeteer-core` to 25.12.
+  - `npm run audit:prod`: 0 vulnerabilities (2026-10-24, after Next.js 16.4.1, zod 4.6.6 and puppeteer-core 25.13.0 for new advisories; see `replica/bugs.md` BUG-002). Re-run before every deploy.
   - Dev-only findings remain in eslint's dependency chain; fixing them would downgrade `eslint-config-next`.
 - [x] **Privacy policy lists every processor:** Supabase, Vercel, Anthropic via the gateway, Stripe, Resend, Google and Apple. `/privacy` is a **draft for legal review**.
 

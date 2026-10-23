@@ -1,6 +1,12 @@
 # Test plan: resume builder (Rezi rebuild)
 
-Build: `backend/core` @ 09dc7fd + test work. Date: 2026-10-24.
+Build: `test/e2e` @ ac1b38f. Date: 2026-10-24.
+
+**Result:**
+- 54 / 54 e2e cases pass (final run, fresh server).
+- Unit 19/19, schema 44/44, walkthrough 46/46, production dependency audit 0.
+- 9 manual cases: 1 done (the dependency audit). 6 need your Stripe, Resend or Google keys; 2 (slow network, auto-fit) are for a later pass.
+- Bugs: 7 found, 7 fixed (2 S1, 1 S2, 3 S3, 1 S4); see `bugs.md`.
 Env: local dev server on the local stand-ins (JSON data layer, demo AI writer,
 email to `.data/outbox.jsonl`), started with the local-only Stripe webhook
 secret (`web-webhook-test` in `.claude/launch.json`). Chrome 1440×900; 390×844
