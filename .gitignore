@@ -45,3 +45,6 @@ next-env.d.ts
 
 # local fake database used until /replica-backend
 /.data/
+
+# Screenshots of the original app from your own account: kept locally, not published
+/replica/screens/
