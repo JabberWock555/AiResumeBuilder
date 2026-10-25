@@ -8,7 +8,7 @@ Stripe or Resend keys).
 | severity | found | fixed | open |
 | --- | --- | --- | --- |
 | S1 | 2 | 2 | 0 |
-| S2 | 1 | 1 | 0 |
+| S2 | 2 | 2 | 0 |
 | S3 | 3 | 3 | 0 |
 | S4 | 1 | 1 | 0 |
 
@@ -124,6 +124,31 @@ Expected: "Preview and download".
 Actual: "Preview  and download", with a gap twice as wide. The button's flex gap fell between the two text pieces.
 Evidence: `replica/clone-screens/S19-experience.png` before; a 1440px screenshot of the button after.
 Status: fixed in ac1b38f. The label is one text span.
+
+### BUG-008: if the confirmation email can't be sent, sign-up fails with a bare error and leaves an account that can never be confirmed
+
+- Severity: S2 (sign-up broken while email is down; no way out for that address)
+- Flow / case: F01 / F11; reported on 2026-10-25 by you, testing the `web-prod` build
+- Screen: S05, then S06
+- Build: production build of a2841b1 (`web-prod`: no Resend key)
+
+Steps
+1. Open the production build without an email provider (or with Resend failing).
+2. Sign up.
+3. Log in with the same details, or sign up again.
+
+Expected: a clear "couldn't send the email, try again" message, with nothing half-made; once email works, signing up again sends the link.
+Actual: sign-up answered 500 ("Something went wrong") but had already saved the account. Logging in said "Check your email" for a link that was never sent. Signing up again went down the "you already have an account" path, which also failed, so the address was stuck.
+Evidence: server log `Error: email is not configured (RESEND_API_KEY, EMAIL_FROM)` at `signUp`; curl reproduced 500, then 403 `email_not_verified`, then 500.
+Suspected cause: the account was written before the email was sent, and a failed send wasn't undone. Production also refuses the local outbox, correctly, and the `web-prod` config gave it no alternative.
+Status: fixed in this commit:
+- A failed send now undoes a new account and answers 503 `email_unavailable` ("We couldn't send the email just now. Nothing was changed").
+- Reset, resend and change email give the same answer.
+- Supabase's SMTP failures map to the same error.
+- Signing up again before confirming sends a fresh confirmation link, as Supabase does, which also frees accounts already stuck.
+- `EMAIL_OUTBOX=1` lets a local production build use the outbox; it's ignored on Vercel production. `web-prod` sets it.
+
+Tests: `src/server/repo/fake-auth.test.ts` (4, failed before the fix). A production-build check signed up, confirmed, logged out and logged in.
 
 ## To check (not reproduced, or needs your keys)
 

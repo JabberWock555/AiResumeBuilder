@@ -28,3 +28,9 @@ export class RateLimitError extends Error {
     super("rate_limited");
   }
 }
+/** The email provider couldn't take the message; nothing was changed. */
+export class EmailUnavailableError extends Error {
+  constructor() {
+    super("email_unavailable");
+  }
+}

@@ -4,9 +4,9 @@ Build: `test/e2e` @ ac1b38f. Date: 2026-10-24.
 
 **Result:**
 - 54 / 54 e2e cases pass (final run, fresh server).
-- Unit 19/19, schema 44/44, walkthrough 46/46, production dependency audit 0.
+- Unit 23/23, schema 44/44, walkthrough 46/46, production dependency audit 0.
 - 9 manual cases: 1 done (the dependency audit). 6 need your Stripe, Resend or Google keys; 2 (slow network, auto-fit) are for a later pass.
-- Bugs: 7 found, 7 fixed (2 S1, 1 S2, 3 S3, 1 S4); see `bugs.md`.
+- Bugs: 8 found, 8 fixed (2 S1, 2 S2, 3 S3, 1 S4); see `bugs.md`.
 Env: local dev server on the local stand-ins (JSON data layer, demo AI writer,
 email to `.data/outbox.jsonl`), started with the local-only Stripe webhook
 secret (`web-webhook-test` in `.claude/launch.json`). Chrome 1440×900; 390×844
@@ -147,6 +147,8 @@ built, so they have no cases yet. F11 is ours: account and security flows.
 | F11-N7 | open redirect | /login?next=https://evil.example.com/app | lands on our /app | e2e | pass |
 | F11-N8 | brute force | 11 wrong passwords for one address | 10 × 401 then 429 | e2e | pass |
 | F11-N9 | CSRF | POST from another Origin | refused | e2e | pass |
+| F11-N10 | email provider down | sign-up, reset, resend while sending fails; sign up again later | 503 "couldn't send the email", no half-made account; the retry gets a fresh link | unit | pass |
+| F11-M4 | production build | `web-prod` launch config: sign up → outbox link → log out → log in | works the same as development | manual | pass (2026-10-25) |
 | F11-M1 | emails arrive | Resend: sign-up, reset, change email reach a real inbox, not spam; links work on a phone | manual | not run: needs Resend + Supabase |
 | F11-M2 | Google sign-in | Continue with Google → consent → /app; second time → straight in | manual | not run: needs the Google client |
 | F11-M3 | dependency audit | `npm audit --omit=dev` | 0 vulnerabilities | manual | pass after BUG-002 |

@@ -1,6 +1,6 @@
 import "server-only";
 import { config } from "../config";
-import { InputError } from "../errors";
+import { EmailUnavailableError, InputError } from "../errors";
 import { adminClient, sessionClaims, userClient } from "../supabase";
 import type { AuthProvider } from "./types";
 
@@ -8,6 +8,9 @@ import type { AuthProvider } from "./types";
 // through Resend as its SMTP server, using the templates in supabase/templates,
 // which link to /auth/confirm with a token hash. That works when the link is
 // opened on a different device from the one that asked for it.
+
+/** Supabase reports an SMTP failure as a 500 "Error sending ... email". */
+const emailFailed = (e: { message?: string; status?: number }) => (e.status ?? 0) >= 500 && /send|smtp|mail/i.test(e.message ?? "");
 
 export const supabaseAuth: AuthProvider = {
   async currentUserId() {
@@ -23,6 +26,7 @@ export const supabaseAuth: AuthProvider = {
     });
     if (error) {
       if (error.code === "weak_password") throw new InputError({ fieldErrors: { password: [error.message] } });
+      if (emailFailed(error)) throw new EmailUnavailableError();
       // An existing address gets the same answer as a new one.
       if (error.code !== "user_already_exists") throw error;
     }
@@ -43,6 +47,7 @@ export const supabaseAuth: AuthProvider = {
   async resendVerification(email, origin) {
     const sb = await userClient();
     const { error } = await sb.auth.resend({ type: "signup", email, options: { emailRedirectTo: `${origin}/auth/confirm` } });
+    if (error && emailFailed(error)) throw new EmailUnavailableError();
     // Rate limits and unknown addresses look the same as success to the caller.
     if (error && error.status !== 429 && error.status !== 400) throw error;
   },
@@ -55,6 +60,7 @@ export const supabaseAuth: AuthProvider = {
   async sendPasswordReset(email, origin) {
     const sb = await userClient();
     const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: `${origin}/reset-password` });
+    if (error && emailFailed(error)) throw new EmailUnavailableError();
     if (error && error.status !== 429) throw error;
   },
 
@@ -95,6 +101,7 @@ export const supabaseAuth: AuthProvider = {
     const { error } = await sb.auth.updateUser({ email: newEmail }, { emailRedirectTo: `${origin}/auth/confirm` });
     if (!error) return;
     if (error.code === "email_exists") throw new Error("email_taken");
+    if (emailFailed(error)) throw new EmailUnavailableError();
     throw error;
   },
 

@@ -40,6 +40,8 @@ export function errorMessage(e: unknown): string {
         return "Some details need fixing.";
       case "rate_limited":
         return "Too many tries in a short time. Wait a few minutes and try again.";
+      case "email_unavailable":
+        return "We couldn’t send the email just now. Nothing was changed: try again in a few minutes.";
       case "billing_off":
         return "Payments aren't switched on yet.";
       default:

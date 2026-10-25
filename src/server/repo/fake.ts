@@ -4,7 +4,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { cookies } from "next/headers";
 import { DEFAULT_SETTINGS, blankContent } from "@/lib/resume/schema";
-import { AuthError, ConflictError, NotFoundError, QuotaError } from "../errors";
+import { AuthError, ConflictError, EmailUnavailableError, NotFoundError, QuotaError } from "../errors";
 import { sendEmail } from "../email";
 import { emails } from "../email-templates";
 import type { AuthProvider, EmailLinkType } from "../auth/types";
@@ -37,7 +37,8 @@ type Db = {
   jobRuns: { job: string; status: string; attempts: number; error?: string; startedAt: string }[];
 };
 
-const FILE = path.join(process.cwd(), ".data", "db.json");
+// FAKE_DB_FILE lets unit tests use a throwaway file.
+const FILE = process.env.FAKE_DB_FILE || path.join(process.cwd(), ".data", "db.json");
 const empty = (): Db => ({
   users: [], sessions: [], emailTokens: [], resumes: [], targets: [], usage: [], exports: [], aiLogs: [],
   subscriptions: [], stripeEvents: [], jobRuns: [],
@@ -428,22 +429,46 @@ async function sessionUserId(db: Db) {
 
 const findByEmail = (db: Db, email: string) => db.users.find((u) => u.email === email.trim().toLowerCase());
 
+/** Sends, or throws EmailUnavailableError so the caller can undo what it did. */
+async function deliver(mail: Parameters<typeof sendEmail>[0]) {
+  try {
+    await sendEmail(mail);
+  } catch (e) {
+    console.error(`email "${mail.tag}" not sent: ${e instanceof Error ? e.message : e}`);
+    throw new EmailUnavailableError();
+  }
+}
+
 export const fakeAuth: AuthProvider = {
   currentUserId: () => read((db) => sessionUserId(db)),
 
   async signUp({ email, password, fullName, origin }) {
-    const mail = await tx((db) => {
+    const { mail, createdId } = await tx((db) => {
       const e = email.trim().toLowerCase();
       const existing = findByEmail(db, e);
-      if (existing) return emails.accountExists(e, `${origin}/login`, `${origin}/forgot-password`);
+      // Not confirmed yet: send a fresh confirmation link (as Supabase does).
+      if (existing && !existing.emailVerified)
+        return { mail: emails.verify(e, link(origin, issueToken(db, existing.id, "email"), "email")), createdId: null };
+      if (existing) return { mail: emails.accountExists(e, `${origin}/login`, `${origin}/forgot-password`), createdId: null };
       const u: FakeUser = {
         id: randomUUID(), email: e, fullName: fullName.trim(), plan: "free", theme: "system", appLanguage: "en-US",
         onboarding: {}, createdAt: now(), passwordHash: hash(password), emailVerified: false, stripeCustomerId: null,
       };
       db.users.push(u);
-      return emails.verify(e, link(origin, issueToken(db, u.id, "email"), "email"));
+      return { mail: emails.verify(e, link(origin, issueToken(db, u.id, "email"), "email")), createdId: u.id };
     });
-    await sendEmail(mail);
+    try {
+      await deliver(mail);
+    } catch (e) {
+      // No confirmation email means the account could never be confirmed:
+      // undo it, so signing up again later works.
+      if (createdId)
+        await tx((db) => {
+          db.users = db.users.filter((u) => u.id !== createdId);
+          db.emailTokens = db.emailTokens.filter((t) => t.userId !== createdId);
+        });
+      throw e;
+    }
     return "verify_email";
   },
 
@@ -461,7 +486,7 @@ export const fakeAuth: AuthProvider = {
       const u = findByEmail(db, email);
       return u && !u.emailVerified ? emails.verify(u.email, link(origin, issueToken(db, u.id, "email"), "email")) : null;
     });
-    if (mail) await sendEmail(mail);
+    if (mail) await deliver(mail);
   },
 
   signOut: (scope) =>
@@ -478,7 +503,7 @@ export const fakeAuth: AuthProvider = {
       const u = findByEmail(db, email);
       return u ? emails.reset(u.email, link(origin, issueToken(db, u.id, "recovery"), "recovery")) : null;
     });
-    if (mail) await sendEmail(mail);
+    if (mail) await deliver(mail);
   },
 
   verifyEmailLink: (tokenHash, type) =>
@@ -515,7 +540,7 @@ export const fakeAuth: AuthProvider = {
       if (findByEmail(db, e)) throw new Error("email_taken");
       return emails.changeEmail(e, link(origin, issueToken(db, id, "email_change", e), "email_change"));
     });
-    await sendEmail(mail);
+    await deliver(mail);
   },
 
   emailOf: (userId) => read((db) => db.users.find((u) => u.id === userId)?.email ?? null),
