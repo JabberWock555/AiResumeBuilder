@@ -31,8 +31,14 @@ try {
   await sql`create schema if not exists supabase_migrations`;
   await sql`create table if not exists supabase_migrations.schema_migrations (
     version text primary key, statements text[], name text)`;
-  const done = new Set((await sql`select version from supabase_migrations.schema_migrations`).map((r) => r.version));
-  const pending = files.filter((f) => !done.has(f.split("_")[0]));
+  // Applied by this script (version "0001") or by the Supabase CLI or MCP
+  // connector (a timestamp version, with the name "init", "backend", ...).
+  const rows = await sql`select version, name from supabase_migrations.schema_migrations`;
+  const done = new Set(rows.flatMap((r) => [r.version, r.name]));
+  const pending = files.filter((f) => {
+    const [version, ...rest] = f.replace(/\.sql$/, "").split("_");
+    return !done.has(version) && !done.has(rest.join("_"));
+  });
 
   if (!pending.length) console.log(`Up to date (${files.length} migrations).`);
   for (const f of pending) {

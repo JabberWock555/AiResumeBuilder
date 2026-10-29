@@ -83,6 +83,10 @@ Copy `.env.example` to `.env.local` and fill it in as you go.
 
 ## Database
 
+- **Applied to Supabase** (project AiResumeBuilder, 2026-10-30) through the Supabase connector, as `init`, `backend`, `razorpay`, `hardening` and `export_server_only`. The direct `DATABASE_URL` host is IPv6-only and didn't resolve here. `npm run db:migrate` recognises migrations applied this way by name, and won't re-run them.
+- **Supabase advisors:** after `0004_hardening`, the warnings left are deliberate:
+  - three service-only tables have RLS with no policies;
+  - `consume_quota` is callable by signed-in users (it only spends their own quota).
 - **Migrations:**
   - `supabase/migrations/0001_init.sql` holds the schema from `/replica-architect`.
   - `0002_backend.sql` adds:
@@ -106,7 +110,8 @@ Copy `.env.example` to `.env.local` and fill it in as you go.
     - quotas, refunds, plan sync, rate limits and prune jobs;
     - users can't call the service functions, write billing columns or subscriptions, or read rate limits.
   - `npm run walkthrough`: user B gets 404 from A's resume on GET, PATCH, DELETE, export and AI, and an empty list. **Passes.**
-  - `npm run check:supabase`: the same rules over the real Supabase API with two throwaway users, plus storage folders. **Not run yet: needs your project.**
+  - `npm run check:supabase`: the same rules over the real Supabase API with two throwaway users, plus storage folders. **19/19 pass on the real project (2026-10-30).**
+  - `npm run e2e:live`: log in as the demo user, edit, autosave, reload, PDF and re-download, on the real project. **Passes.**
 - **Seed:** `npm run seed` (local) or `npm run seed -- --supabase`. One made-up person (Jordan Lee), one resume and one job ad. It refuses to run against a production deployment.
 - **Backups:** Supabase's daily backups come with the Pro plan, which keeps 7 days. The Free plan has none you can restore from. **Before launch:** move the project to Pro (or add point-in-time recovery), then check Database → Backups shows a backup from the last 24 hours. Not checked yet.
 
@@ -227,7 +232,8 @@ Switched from Stripe on 2026-10-30, at your request. `0003_razorpay.sql` renames
 | `npm test` (fact guard, Razorpay events, signatures, sign-up email failure) | 23 / 23 |
 | `npm run walkthrough` (sign-up by emailed link, editor, AI, PDF, quotas, second-user isolation, change email, reset password, rate limit, sign out everywhere, delete account, axe, 390 px) | 46 / 46 |
 | `npm run lint`, `tsc`, `npm run build` | pass |
-| `npm run check:supabase` | not run: needs your Supabase project |
+| `npm run check:supabase` (real project) | 19 / 19 |
+| `npm run e2e:live` (real project) | pass |
 | Razorpay Checkout and cancel, Google sign-in, Resend delivery, AI Gateway calls | not run: need working keys |
 
 Next: `/replica-test`.

@@ -330,9 +330,11 @@ export const supabaseRepo: Repo = {
   },
 
   async recordExport(userId, resumeId, format, revision, templateId) {
-    const sb = await clientFor(userId);
-    const { data, error } = await sb.rpc("record_export", {
-      p_resume: resumeId, p_format: format, p_revision: revision, p_template: templateId,
+    // Server only (service role): users must not be able to mark a revision as
+    // exported themselves, or re-downloads would be free (BUG-009).
+    await clientFor(userId);
+    const { data, error } = await adminClient().rpc("record_export", {
+      p_user: userId, p_resume: resumeId, p_format: format, p_revision: revision, p_template: templateId,
     });
     if (error) fail(error);
     return { fresh: Boolean(data) };

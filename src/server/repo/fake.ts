@@ -155,7 +155,13 @@ export const fakeRepo: Repo = {
       return rows.sort(by);
     }),
 
-  getResume: (userId, id) => read((db) => clone(db.resumes.find((r) => r.id === id && r.userId === userId) ?? null)),
+  // Like Supabase: user reads need that user's session. The print page has no
+  // session and must use getResumeForPrint (BUG-010).
+  getResume: (userId, id) =>
+    read(async (db) => {
+      if ((await sessionUserId(db)) !== userId) throw new AuthError();
+      return clone(db.resumes.find((r) => r.id === id && r.userId === userId) ?? null);
+    }),
   getResumeForPrint: (userId, id) => read((db) => clone(db.resumes.find((r) => r.id === id && r.userId === userId) ?? null)),
 
   createResume: (userId, input) =>

@@ -122,12 +122,23 @@ check('client cannot write exports directly', !!r.error, r.error)
 
 // --- 0002: exports, refunds, plan sync, rate limits, jobs
 
-r = await as(A, `select public.record_export('${resumeA}', 'pdf', 1, 'standard') as fresh`)
-check('first export of a revision is fresh', r.rows?.[0]?.fresh === true, r.error)
-r = await as(A, `select public.record_export('${resumeA}', 'pdf', 1, 'standard') as fresh`)
-check('repeat export of the same revision is not', r.rows?.[0]?.fresh === false, r.error)
-r = await as(B, `select public.record_export('${resumeA}', 'pdf', 2, 'standard')`)
-check('user B cannot record an export on A resume', /resume_not_found/.test(r.error ?? ''), r.error)
+// BUG-009: users could call record_export themselves, marking a version as
+// downloaded so the PDF route served it free. Only the server may record one,
+// and only for the resume's current revision.
+r = await as(A, `select public.record_export('${A}', '${resumeA}', 'pdf', 1, 'standard')`)
+check('user cannot record an export directly (quota bypass)', /permission denied|does not exist/.test(r.error ?? ''), r.error)
+r = await as(A, `select public.record_export('${resumeA}', 'pdf', 1, 'standard')`)
+check('the old user-callable record_export is gone', /does not exist|permission denied/.test(r.error ?? ''), r.error)
+r = await db.query(`select revision from public.resumes where id = '${resumeA}'`)
+const revA = r.rows[0].revision
+r = await db.query(`select public.record_export('${A}', '${resumeA}', 'pdf', ${revA}, 'standard') as fresh`)
+check('server records the first export of the current revision', r.rows[0].fresh === true)
+r = await db.query(`select public.record_export('${A}', '${resumeA}', 'pdf', ${revA}, 'standard') as fresh`)
+check('a repeat export of the same revision is not fresh', r.rows[0].fresh === false)
+try { await db.query(`select public.record_export('${A}', '${resumeA}', 'pdf', ${revA + 1}, 'standard')`); check('server refuses a revision that is not current', false) }
+catch (e) { check('server refuses a revision that is not current', /revision_mismatch/.test(e.message), e.message) }
+try { await db.query(`select public.record_export('${B}', '${resumeA}', 'pdf', ${revA}, 'standard')`); check('server refuses an export for someone else\'s resume', false) }
+catch (e) { check('server refuses an export for someone else\'s resume', /resume_not_found/.test(e.message), e.message) }
 r = await as(B, `select id from public.exports`)
 check('user B sees none of A exports', r.rows?.length === 0, r.error)
 
@@ -189,6 +200,13 @@ r = await db.query(`select column_name from information_schema.columns where tab
 check('profiles.billing_customer_id exists (0003)', r.rows.length === 1)
 r = await as(A, `update public.profiles set billing_customer_id = 'cust_x' where id = '${A}'`)
 check('user cannot set own billing customer', /permission denied/.test(r.error ?? ''), r.error)
+
+r = await as(A, `select public.enforce_resume_limit()`)
+check('users cannot call trigger functions directly (0004)', /permission denied/.test(r.error ?? ''), r.error)
+await db.exec(`reset role; select set_config('request.jwt.claim.sub', '', false); set role anon;`)
+try { await db.query(`select public.consume_quota('pdf_download')`); check('anon cannot call consume_quota (0004)', false) }
+catch (e) { check('anon cannot call consume_quota (0004)', /permission denied/.test(e.message), e.message) }
+finally { await db.exec('reset role') }
 
 await db.exec(`delete from auth.users where id = '${A}'`)
 r = await db.query(`select (select count(*) from public.resumes where user_id = '${A}')::int as resumes,

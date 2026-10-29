@@ -7,7 +7,7 @@ Razorpay or Resend keys).
 
 | severity | found | fixed | open |
 | --- | --- | --- | --- |
-| S1 | 2 | 2 | 0 |
+| S1 | 4 | 4 | 0 |
 | S2 | 2 | 2 | 0 |
 | S3 | 3 | 3 | 0 |
 | S4 | 1 | 1 | 0 |
@@ -149,6 +149,37 @@ Status: fixed in this commit:
 - `EMAIL_OUTBOX=1` lets a local production build use the outbox; it's ignored on Vercel production. `web-prod` sets it.
 
 Tests: `src/server/repo/fake-auth.test.ts` (4, failed before the fix). A production-build check signed up, confirmed, logged out and logged in.
+
+### BUG-009: a signed-in user could make every PDF download free
+
+- Severity: S1 (payments wrong: Free-plan download limit bypassed)
+- Found by: Supabase's security advisor on the real project, 2026-10-30 ("signed-in users can execute SECURITY DEFINER function record_export")
+- Build: b78de49
+
+Steps
+1. Log in on the Free plan and copy your Supabase session token from the browser's developer tools (the cookie is httpOnly, but the user owns their browser).
+2. Call `POST /rest/v1/rpc/record_export` with your resume and its next revision.
+3. Edit the resume, so it reaches that revision, and download the PDF.
+
+Expected: the download counts against the 3 free PDFs.
+Actual: the export route sees the revision as already exported and serves it free, so a Free user gets unlimited PDFs.
+Evidence: schema tests "user cannot record an export directly (quota bypass)" and "the old user-callable record_export is gone" failed before the fix.
+Status: fixed in this commit by migration `0005_export_server_only.sql`, applied to Supabase. `record_export` is now service-role only, takes the user id, and refuses any revision that isn't the resume's current one. The app records exports with the admin client after its own checks. Verified on the real project by `npm run check:supabase` ("A cannot record an export directly either").
+
+### BUG-010: PDF export fails on Supabase ("Print page did not render")
+
+- Severity: S1 (core flow blocked on the real backend)
+- Flow / case: F01 / F01-H1, F01-N1, and the live smoke test
+- Build: b78de49 on Supabase
+
+Steps
+1. Run the app with the Supabase keys, log in, open a resume, Download PDF.
+
+Expected: a PDF.
+Actual: 500. The print page, which headless Chrome loads with a signed 60-second token and no session, read the resume with the session-checked `getResume`, which threw `not_authenticated`.
+Evidence: server log `Error: not_authenticated at clientFor … at PrintPage`; the live smoke test got 500.
+Suspected cause: `getResumeForPrint` was added for exactly this but never used. The local stand-in didn't check sessions in `getResume`, so 55 local e2e cases passed.
+Status: fixed in this commit. The print page uses `getResumeForPrint`, and the local stand-in now enforces the session like Supabase does. Putting the old line back makes F01-N1 fail locally; with the fix it passes, and the live smoke test (`npm run e2e:live`) passes on Supabase.
 
 ## To check (not reproduced, or needs your keys)
 

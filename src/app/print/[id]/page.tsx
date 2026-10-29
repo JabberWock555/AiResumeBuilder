@@ -12,7 +12,8 @@ export default async function PrintPage({ params, searchParams }: PageProps<"/pr
   const t = (await searchParams).t;
   const tok = typeof t === "string" ? readPrintToken(t, id) : null;
   if (!tok) notFound();
-  const resume = await repo.getResume(tok.userId, id);
+  // No session here, only the signed token naming the user and resume.
+  const resume = await repo.getResumeForPrint(tok.userId, id);
   if (!resume || resume.revision !== tok.revision) notFound();
   const page = PAGE[resume.settings.pageSize];
   return (

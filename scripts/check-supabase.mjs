@@ -45,6 +45,8 @@ const users = [];
 try {
   const limits = await createClient(url, anon).from("plan_limits").select("plan");
   check("migrations applied (plan_limits readable)", limits.data?.length === 15, limits.error?.message);
+  const svc = await admin.rpc("prune_housekeeping");
+  check("0003 applied (billing_events)", svc.data && "billing_events" in svc.data, svc.error?.message);
 
   const A = await makeUser("a");
   const B = await makeUser("b");
@@ -72,8 +74,10 @@ try {
   const tgt = await B.db.from("target_jobs").insert({ resume_id: resumeA, user_id: B.id, title: "Job", description: "x".repeat(60) });
   check("B cannot attach a job ad to A's resume", Boolean(tgt.error));
 
-  const exp = await B.db.rpc("record_export", { p_resume: resumeA, p_format: "pdf", p_revision: 1, p_template: "standard" });
+  const exp = await B.db.rpc("record_export", { p_user: A.id, p_resume: resumeA, p_format: "pdf", p_revision: 1, p_template: "standard" });
   check("B cannot record an export on A's resume", Boolean(exp.error));
+  const own = await A.db.rpc("record_export", { p_user: A.id, p_resume: resumeA, p_format: "pdf", p_revision: 1, p_template: "standard" });
+  check("A cannot record an export directly either (BUG-009)", Boolean(own.error));
 
   const q = await A.db.rpc("consume_quota", { p_kind: "pdf_download" });
   check("A spends a download", q.data === 2, q.error?.message);

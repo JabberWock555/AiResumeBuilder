@@ -3,10 +3,10 @@
 Build: `test/e2e` @ ac1b38f. Date: 2026-10-24.
 
 **Result:**
-- 55 / 55 e2e cases pass (2026-10-30, after the move to Razorpay).
+- 55 / 55 e2e cases pass on the local stand-ins (2026-10-30). On the real Supabase project: `npm run check:supabase` 19/19 and `npm run e2e:live` pass.
 - Unit 23/23, schema 44/44, walkthrough 46/46, production dependency audit 0.
 - 9 manual cases: 1 done (the dependency audit). 6 need your Razorpay, Resend or Google keys; 2 (slow network, auto-fit) are for a later pass.
-- Bugs: 8 found, 8 fixed (2 S1, 2 S2, 3 S3, 1 S4); see `bugs.md`.
+- Bugs: 10 found, 10 fixed (4 S1, 2 S2, 3 S3, 1 S4); see `bugs.md`.
 Env: local dev server on the local stand-ins (JSON data layer, demo AI writer,
 email to `.data/outbox.jsonl`), started with a local-only Razorpay webhook
 secret, empty Razorpay keys and `DATA_BACKEND=local` (`web-webhook-test` in `.claude/launch.json`). Chrome 1440×900; 390×844
