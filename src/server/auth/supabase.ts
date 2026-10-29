@@ -59,7 +59,7 @@ export const supabaseAuth: AuthProvider = {
 
   async sendPasswordReset(email, origin) {
     const sb = await userClient();
-    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: `${origin}/reset-password` });
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: `${origin}/auth/confirm?next=/reset-password` });
     if (error && emailFailed(error)) throw new EmailUnavailableError();
     if (error && error.status !== 429) throw error;
   },
@@ -98,7 +98,7 @@ export const supabaseAuth: AuthProvider = {
 
   async changeEmail(newEmail, origin) {
     const sb = await userClient();
-    const { error } = await sb.auth.updateUser({ email: newEmail }, { emailRedirectTo: `${origin}/auth/confirm` });
+    const { error } = await sb.auth.updateUser({ email: newEmail }, { emailRedirectTo: `${origin}/auth/confirm?next=/app/settings?email=changed` });
     if (!error) return;
     if (error.code === "email_exists") throw new Error("email_taken");
     if (emailFailed(error)) throw new EmailUnavailableError();
