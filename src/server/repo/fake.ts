@@ -20,7 +20,7 @@ import type { AiLog, BillingStore, Ops, Plan, QuotaKind, Repo, Resume, Subscript
 type FakeUser = User & {
   passwordHash: string;
   emailVerified: boolean;
-  stripeCustomerId: string | null;
+  billingCustomerId: string | null;
 };
 type Db = {
   users: FakeUser[];
@@ -33,7 +33,7 @@ type Db = {
   exports: { userId: string; resumeId: string; format: string; revision: number; templateId: string; createdAt: string }[];
   aiLogs: (AiLog & { userId: string; createdAt: string })[];
   subscriptions: (Subscription & { userId: string })[];
-  stripeEvents: { id: string; type: string; processedAt: string | null }[];
+  billingEvents: { id: string; type: string; processedAt: string | null }[];
   jobRuns: { job: string; status: string; attempts: number; error?: string; startedAt: string }[];
 };
 
@@ -41,7 +41,7 @@ type Db = {
 const FILE = process.env.FAKE_DB_FILE || path.join(process.cwd(), ".data", "db.json");
 const empty = (): Db => ({
   users: [], sessions: [], emailTokens: [], resumes: [], targets: [], usage: [], exports: [], aiLogs: [],
-  subscriptions: [], stripeEvents: [], jobRuns: [],
+  subscriptions: [], billingEvents: [], jobRuns: [],
 });
 
 const g = globalThis as unknown as { __fakeDbLock?: Promise<unknown> };
@@ -303,7 +303,7 @@ export const fakeBilling: BillingStore = {
       if (!u) throw new NotFoundError("user_not_found");
       return {
         plan: u.plan,
-        stripeCustomerId: u.stripeCustomerId ?? null,
+        customerId: u.billingCustomerId ?? null,
         subscriptions: clone(db.subscriptions.filter((s) => s.userId === userId).map(({ userId: _u, ...s }) => (void _u, s))),
       };
     }),
@@ -311,16 +311,16 @@ export const fakeBilling: BillingStore = {
   setCustomer: (userId, customerId) =>
     tx((db) => {
       const u = db.users.find((x) => x.id === userId);
-      if (u) u.stripeCustomerId = customerId;
+      if (u) u.billingCustomerId = customerId;
     }),
 
-  userByCustomer: (customerId) => read((db) => db.users.find((u) => u.stripeCustomerId === customerId)?.id ?? null),
+  userByCustomer: (customerId) => read((db) => db.users.find((u) => u.billingCustomerId === customerId)?.id ?? null),
 
   claimEvent: (id, type) =>
     tx((db) => {
-      const e = db.stripeEvents.find((x) => x.id === id);
+      const e = db.billingEvents.find((x) => x.id === id);
       if (!e) {
-        db.stripeEvents.push({ id, type, processedAt: null });
+        db.billingEvents.push({ id, type, processedAt: null });
         return "new" as const;
       }
       return e.processedAt ? ("done" as const) : ("retry" as const);
@@ -328,29 +328,36 @@ export const fakeBilling: BillingStore = {
 
   finishEvent: (id) =>
     tx((db) => {
-      const e = db.stripeEvents.find((x) => x.id === id);
+      const e = db.billingEvents.find((x) => x.id === id);
       if (e) e.processedAt = now();
     }),
 
   upsertSubscription: (userId, s) =>
     tx((db) => {
       const same = (x: Subscription) =>
-        (s.stripeSubscriptionId && x.stripeSubscriptionId === s.stripeSubscriptionId) ||
-        (s.stripeCheckoutSessionId && x.stripeCheckoutSessionId === s.stripeCheckoutSessionId);
+        (s.providerSubscriptionId && x.providerSubscriptionId === s.providerSubscriptionId) ||
+        (s.providerCheckoutId && x.providerCheckoutId === s.providerCheckoutId);
       const prev = db.subscriptions.find(same);
-      if (prev) Object.assign(prev, { ...s, stripeCheckoutSessionId: s.stripeCheckoutSessionId ?? prev.stripeCheckoutSessionId });
+      if (prev) Object.assign(prev, { ...s, providerCheckoutId: s.providerCheckoutId ?? prev.providerCheckoutId });
       else db.subscriptions.push({ ...s, userId });
       return syncPlan(db, userId);
     }),
 
-  refundLifetime: (paymentIntentId) =>
+  refundLifetime: (paymentId) =>
     tx((db) => {
-      const s = db.subscriptions.find((x) => x.kind === "lifetime" && x.stripePaymentIntentId === paymentIntentId);
+      const s = db.subscriptions.find((x) => x.kind === "lifetime" && x.providerPaymentId === paymentId);
       if (!s) return null;
       s.status = "refunded";
       syncPlan(db, s.userId);
       return s.userId;
     }),
+
+  openSubscriptions: () =>
+    read((db) =>
+      db.subscriptions
+        .filter((s) => s.providerSubscriptionId && !["canceled", "refunded"].includes(s.status))
+        .map((s) => ({ userId: s.userId, providerSubscriptionId: s.providerSubscriptionId! })),
+    ),
 };
 
 // ---------------------------------------------------------------------------
@@ -383,9 +390,9 @@ export const fakeOps: Ops = {
     }),
   pruneHousekeeping: () =>
     tx((db) => {
-      const before = db.stripeEvents.length;
-      db.stripeEvents = db.stripeEvents.slice(-1000);
-      return { stripe_events: before - db.stripeEvents.length };
+      const before = db.billingEvents.length;
+      db.billingEvents = db.billingEvents.slice(-1000);
+      return { billing_events: before - db.billingEvents.length };
     }),
 };
 
@@ -452,7 +459,7 @@ export const fakeAuth: AuthProvider = {
       if (existing) return { mail: emails.accountExists(e, `${origin}/login`, `${origin}/forgot-password`), createdId: null };
       const u: FakeUser = {
         id: randomUUID(), email: e, fullName: fullName.trim(), plan: "free", theme: "system", appLanguage: "en-US",
-        onboarding: {}, createdAt: now(), passwordHash: hash(password), emailVerified: false, stripeCustomerId: null,
+        onboarding: {}, createdAt: now(), passwordHash: hash(password), emailVerified: false, billingCustomerId: null,
       };
       db.users.push(u);
       return { mail: emails.verify(e, link(origin, issueToken(db, u.id, "email"), "email")), createdId: u.id };

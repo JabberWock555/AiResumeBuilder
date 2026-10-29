@@ -33,7 +33,7 @@ function Row({ title, body, children }: { title: string; body?: React.ReactNode;
   );
 }
 
-/** One-off messages for where the user came back from: Stripe, or an email link. */
+/** One-off messages for where the user came back from: a payment, or an email link. */
 function useArrivalToast() {
   const params = useSearchParams();
   const router = useRouter();
@@ -43,7 +43,7 @@ function useArrivalToast() {
   useEffect(() => {
     if (billing === "success") {
       toast({ tone: "success", title: "Payment received. Thanks for going Pro." });
-      // The plan is set by Stripe's webhook, a moment after the redirect.
+      // The plan is set by the verified payment; refresh once more in case the webhook adds anything.
       const t = setTimeout(() => router.refresh(), 2500);
       router.replace("/app/settings", { scroll: false });
       return () => clearTimeout(t);

@@ -1,13 +1,12 @@
 import "server-only";
 import { timingSafeEqual } from "node:crypto";
-import Stripe from "stripe";
 import { auth, billingStore, ops } from "./repo";
 import { appUrl, config } from "./config";
 import { adminClient } from "./supabase";
 import { sendEmail } from "./email";
 import { emails } from "./email-templates";
-import { HANDLED_EVENTS, processEvent } from "./billing/events";
-import { billingDeps, stripe } from "./billing/stripe";
+import { applySubscription } from "./billing/events";
+import { billingDeps } from "./billing/razorpay";
 
 // Scheduled jobs, run by Vercel Cron (vercel.ts) as GET /api/cron/<name>.
 // Each run gets 3 attempts with a short backoff; a run that still fails is
@@ -39,9 +38,9 @@ export const JOBS = {
   },
 
   /**
-   * Daily 04:00. Replays the last 48 hours of Stripe events through the same
-   * handler as the webhook. Already-processed events are skipped, so this only
-   * fixes what a missed or failed webhook left behind.
+   * Daily 04:00. Re-reads every open subscription from Razorpay and stores
+   * what it says, which fixes anything a missed or failed webhook left behind
+   * (Razorpay has no "list recent events" API to replay).
    */
   "reconcile-billing": async () => {
     if (!config.billing) return { skipped: "billing off" };
@@ -49,13 +48,16 @@ export const JOBS = {
       const to = await auth.emailOf(userId);
       if (to) await sendEmail(emails.paymentFailed(to, `${appUrl()}/app/settings#billing`));
     });
-    const counts: Record<string, number> = {};
-    const since = Math.floor(Date.now() / 1000) - 48 * 3600;
-    for await (const event of stripe().events.list({ created: { gte: since }, types: [...HANDLED_EVENTS], limit: 100 })) {
-      const r = await processEvent(event as Stripe.Event, billingStore, deps);
-      counts[r] = (counts[r] ?? 0) + 1;
+    let checked = 0;
+    let changed = 0;
+    for (const { userId, providerSubscriptionId } of await billingStore.openSubscriptions()) {
+      const sub = await deps.latestSubscription!(providerSubscriptionId);
+      const r = await applySubscription(billingStore, deps, sub, userId);
+      if (r.status === "past_due" && r.previousStatus !== "past_due") await deps.paymentFailed(userId);
+      checked++;
+      if (r.status !== r.previousStatus) changed++;
     }
-    return counts;
+    return { checked, changed };
   },
 
   /** Weekly, Sunday 05:00. AI call logs older than 180 days, plus old rate-limit windows and events. */

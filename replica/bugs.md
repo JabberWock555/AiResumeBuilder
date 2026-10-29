@@ -3,7 +3,7 @@
 From `/replica-test` on 2026-10-24, on branch `test/e2e`. Every bug here was
 reproduced, and each fix landed with a test that failed before it and passes
 after. Browser: Chrome, 1440×900 unless noted. Local stand-ins (no Supabase,
-Stripe or Resend keys).
+Razorpay or Resend keys).
 
 | severity | found | fixed | open |
 | --- | --- | --- | --- |
@@ -156,8 +156,8 @@ Tests: `src/server/repo/fake-auth.test.ts` (4, failed before the fix). A product
 - **Slow network (F01-E14), and auto-fit on a two-page resume (F05-E2):** not run yet.
 - **Development-only warning:** Next prints "Encountered a script tag…" when it renders a not-found page from a layout in development. Not in the production build. F08-N1 allows it and says why.
 - **Needs your keys (manual cases in `test-plan.md`):**
-  - Stripe Checkout with `4242…` and the declined card `4000 0000 0000 0002` (F06-H3, F06-N3);
-  - one-click cancel and the portal against Stripe (F09-H2, F09-H3);
+  - Razorpay Checkout, with a success and a failure test payment (F06-H3, F06-N3);
+  - one-click cancel against Razorpay (F09-H2);
   - Resend emails arriving, not in spam, with links that work on a phone (F11-M1);
   - Google sign-in (F11-M2);
   - `npm run check:supabase` for the access rules on the real database.

@@ -348,7 +348,7 @@ try {
   for (let i = 0; i < 11; i++) tries.push(await api(page, "/api/auth/login", { method: "POST", body: JSON.stringify({ email: nobody, password: "wrong-password" }) }));
   ok("login is rate limited per address", tries.at(-1) === 429 && tries.slice(0, 10).every((x) => x === 401), JSON.stringify(tries));
 
-  ok("unsigned Stripe webhooks are refused", (await api(page, "/api/webhooks/stripe", { method: "POST", body: "{}" })) === 400);
+  ok("unsigned Razorpay webhooks are refused", (await api(page, "/api/webhooks/razorpay", { method: "POST", body: "{}" })) === 400);
   ok("cron jobs need the secret", (await api(page, "/api/cron/prune-logs")) === 403);
 
   // Password reset by email, from a signed-out browser. Other sessions end.

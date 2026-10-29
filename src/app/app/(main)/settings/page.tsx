@@ -20,7 +20,6 @@ export default async function SettingsPage() {
     current: current && {
       kind: current.kind, status: current.status, currentPeriodEnd: current.currentPeriodEnd, cancelAtPeriodEnd: current.cancelAtPeriodEnd,
     },
-    hasCustomer: Boolean(account.stripeCustomerId),
   };
   return (
     <Suspense>

@@ -7,7 +7,7 @@ import { AuthError, ConflictError, NotFoundError, QuotaError } from "./errors";
 // Two kinds of Supabase client:
 // - userClient(): acts as the signed-in user, from their session cookies, so
 //   row level security applies to every query. Used for anything a user does.
-// - adminClient(): the service role, which bypasses RLS. Used only by Stripe
+// - adminClient(): the service role, which bypasses RLS. Used only by Razorpay
 //   webhooks, cron jobs, refunds, AI logs, the print page and account deletion,
 //   each of which filters by user id explicitly.
 //

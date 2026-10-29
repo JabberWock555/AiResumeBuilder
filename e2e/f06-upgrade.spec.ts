@@ -1,4 +1,4 @@
-// F06: upgrade (S17 dialog → Stripe). Checkout itself needs Stripe test keys (manual, see test-plan.md).
+// F06: upgrade (S17 dialog → Razorpay Checkout). Paying needs Razorpay test keys (manual, see test-plan.md).
 import { test, expect, createResume, baseURL, makePro } from "./helpers";
 
 test.describe("F06 upgrade", () => {
@@ -10,7 +10,7 @@ test.describe("F06 upgrade", () => {
     const d = page.getByRole("dialog", { name: "Upgrade to Pro" });
     await expect(d.getByText("The free plan includes one resume.")).toBeVisible();
     await axe(page, "S17 upgrade");
-    // Without Stripe keys there's no way to pay, and the dialog says so.
+    // Without Razorpay keys there's no way to pay, and the dialog says so.
     await expect(d.getByText(/Payments aren’t switched on/)).toBeVisible();
     await expect(d.getByRole("button", { name: "Continue" })).toBeDisabled();
   });
@@ -23,7 +23,7 @@ test.describe("F06 upgrade", () => {
     expect((await r.json()).error).toBe("billing_off");
   });
 
-  test("F06-H2 after Stripe confirms, limits lift: more resumes, Pro in Settings", async ({ page, newUser }) => {
+  test("F06-H2 after Razorpay confirms, limits lift: more resumes, Pro in Settings", async ({ page, newUser }) => {
     await newUser(page);
     await createResume(page.request, baseURL(page));
     await makePro(page);
@@ -37,9 +37,10 @@ test.describe("F06 upgrade", () => {
     allow(/status of 400/);
     await newUser(page);
     const me = await (await page.request.get("/api/me")).json();
-    const body = JSON.stringify({ id: "evt_forged", type: "customer.subscription.created", data: { object: { metadata: { user_id: me.user.id } } } });
-    const r1 = await page.request.post("/api/webhooks/stripe", { data: body, headers: { "content-type": "application/json" } });
-    const r2 = await page.request.post("/api/webhooks/stripe", { data: body, headers: { "content-type": "application/json", "stripe-signature": "t=1,v1=deadbeef" } });
+    const body = JSON.stringify({ event: "subscription.activated", payload: { subscription: { entity: { id: "sub_forged", plan_id: "p", status: "active", notes: { user_id: me.user.id } } } } });
+    const headers = { "content-type": "application/json", "x-razorpay-event-id": "evt_forged" };
+    const r1 = await page.request.post("/api/webhooks/razorpay", { data: body, headers });
+    const r2 = await page.request.post("/api/webhooks/razorpay", { data: body, headers: { ...headers, "x-razorpay-signature": "deadbeef".repeat(8) } });
     expect([r1.status(), r2.status()]).toEqual([400, 400]);
     expect((await (await page.request.get("/api/me")).json()).user.plan).toBe("free");
   });

@@ -52,8 +52,8 @@ export const emails = {
     const h = "Your payment didn't go through";
     const b = [
       "We couldn't take this period's payment for your plan. Your card company may have declined it, or the card may have expired.",
-      "Stripe will try again over the next few days, and you keep Pro in the meantime. To fix it now, update your card:",
+      "Razorpay will try again over the next few days, and you keep Pro in the meantime. Razorpay also emails you a link to pay with another card or UPI. Your plan:",
     ];
-    return { to, tag: "payment_failed", subject: `Payment problem with your ${PRODUCT} plan`, text: text(h, b, link), html: layout(h, b, { label: "Update card", href: link }, "You're getting this because you have a paid plan.") };
+    return { to, tag: "payment_failed", subject: `Payment problem with your ${PRODUCT} plan`, text: text(h, b, link), html: layout(h, b, { label: "See your plan", href: link }, "You're getting this because you have a paid plan.") };
   },
 };

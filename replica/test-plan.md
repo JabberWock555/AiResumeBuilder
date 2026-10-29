@@ -3,19 +3,19 @@
 Build: `test/e2e` @ ac1b38f. Date: 2026-10-24.
 
 **Result:**
-- 54 / 54 e2e cases pass (final run, fresh server).
+- 55 / 55 e2e cases pass (2026-10-30, after the move to Razorpay).
 - Unit 23/23, schema 44/44, walkthrough 46/46, production dependency audit 0.
-- 9 manual cases: 1 done (the dependency audit). 6 need your Stripe, Resend or Google keys; 2 (slow network, auto-fit) are for a later pass.
+- 9 manual cases: 1 done (the dependency audit). 6 need your Razorpay, Resend or Google keys; 2 (slow network, auto-fit) are for a later pass.
 - Bugs: 8 found, 8 fixed (2 S1, 2 S2, 3 S3, 1 S4); see `bugs.md`.
 Env: local dev server on the local stand-ins (JSON data layer, demo AI writer,
-email to `.data/outbox.jsonl`), started with the local-only Stripe webhook
-secret (`web-webhook-test` in `.claude/launch.json`). Chrome 1440×900; 390×844
+email to `.data/outbox.jsonl`), started with a local-only Razorpay webhook
+secret, empty Razorpay keys and `DATA_BACKEND=local` (`web-webhook-test` in `.claude/launch.json`). Chrome 1440×900; 390×844
 where noted.
 
 **Run it:**
 ```
 npm run seed -- --reset
-STRIPE_WEBHOOK_SECRET=whsec_local_webhook_check_only npm run dev
+# start the dev server with the web-webhook-test launch config (see .claude/launch.json)
 npm run e2e
 ```
 Restart the dev server before a full run: the local rate limits live in memory,
@@ -28,10 +28,9 @@ and one run signs up about 60 accounts from one address.
 Selectors are roles and labels only.
 
 **Other suites:**
-- `npm test`: unit tests (fact guard, Stripe events, signatures).
+- `npm test`: unit tests (fact guard, Razorpay events, signatures, sign-up email failure).
 - `npm run test:schema`: 44 database rules.
 - `npm run walkthrough`: the long scripted tour and screenshots.
-- `npm run webhook:check`: signed Stripe events.
 
 **Columns:** auto = `e2e` (Playwright spec), `unit`, `schema`, or `manual`.
 Results are from the final run.
@@ -94,11 +93,11 @@ built, so they have no cases yet. F11 is ours: account and security flows.
 | case | type | steps | expected | auto | result |
 | --- | --- | --- | --- | --- | --- |
 | F06-H1 | limit | free user with 1 resume → New resume | upgrade dialog with the reason; honest that payments are off; Continue disabled | e2e | pass |
-| F06-H2 | after payment | Stripe event: subscription created | more resumes allowed; Settings shows Pro, monthly, renewal date | e2e | pass |
+| F06-H2 | after payment | Razorpay webhook: subscription.activated | more resumes allowed; Settings shows Pro, monthly, renewal date | e2e | pass |
 | F06-N1 | billing off | POST /api/billing/checkout without keys | 503 billing_off, nothing half-created | e2e | pass |
 | F06-N2 | forged webhook | unsigned, then wrongly signed event granting Pro | 400 both times; plan stays Free | e2e | pass |
-| F06-N3 | card declined | Checkout with `4000 0000 0000 0002` | Stripe shows the decline; plan stays Free; no subscription row | manual | not run: needs Stripe test keys |
-| F06-H3 | Checkout end to end | test card `4242 4242 4242 4242`, each plan | lands on Settings "Payment received", Pro within seconds | manual | not run: needs Stripe test keys |
+| F06-N3 | payment fails | Razorpay Checkout with a failing test card or UPI `failure@razorpay` | Razorpay shows the failure; plan stays Free | manual | not run: needs working Razorpay test keys |
+| F06-H3 | Checkout end to end | Razorpay test card or UPI `success@razorpay`, each plan | Razorpay modal → Settings "Payment received", Pro straight away (verified signature) | manual | not run: needs working Razorpay test keys and plans |
 
 ## F07 Anonymous ATS check (page only; the checker is a could-have)
 
@@ -121,11 +120,11 @@ built, so they have no cases yet. F11 is ours: account and security flows.
 
 | case | type | steps | expected | auto | result |
 | --- | --- | --- | --- | --- | --- |
-| F09-H1 | cancelled | Stripe: cancel_at_period_end | still Pro; "Cancelled. You keep Pro until…" | e2e | pass |
-| F09-E1 | payment failed | Stripe: past_due + invoice.payment_failed twice | Pro kept, "Payment failed" badge, exactly one email | e2e | pass |
-| F09-E2 | ended | Stripe: subscription deleted | Free plan; resumes kept | e2e | pass |
-| F09-H2 | one-click cancel | Settings → Cancel plan → confirm, then Keep my plan | Stripe shows cancel_at_period_end true, then false | manual | not run: needs Stripe test keys |
-| F09-H3 | portal | Manage billing → change card, switch to quarterly | portal opens; the webhook updates the plan | manual | not run: needs Stripe test keys |
+| F09-H1 | active | Razorpay webhook: subscription.activated | Pro, monthly, with renewal date | e2e | pass |
+| F09-E1 | renewal failed | Razorpay webhook: subscription.pending twice | Pro kept, "Payment failed", exactly one email | e2e | pass |
+| F09-E2 | ended | Razorpay webhooks: subscription.halted, then activated and cancelled | Free plan; resumes kept | e2e | pass |
+| F09-E4 | lifetime and refund | Razorpay webhooks: order.paid, then refund.processed (full) | Lifetime, then Free | e2e | pass |
+| F09-H2 | one-click cancel | Settings → Cancel plan → confirm | Razorpay subscription cancelled at cycle end; Settings says "You keep Pro until…"; no undo button | manual | not run: needs working Razorpay test keys |
 | F09-E3 | idempotency | replay events, out of order, half-failed | one row per subscription; correct final plan | unit | pass (12 tests) |
 
 ## F11 Account and security (ours)

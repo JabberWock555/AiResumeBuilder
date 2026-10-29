@@ -105,28 +105,34 @@ export type AiLog = {
 export type Subscription = {
   kind: "month" | "quarter" | "lifetime";
   status: "active" | "trialing" | "past_due" | "canceled" | "incomplete" | "unpaid" | "refunded";
-  stripeSubscriptionId: string | null;
-  stripeCheckoutSessionId: string | null;
-  stripePaymentIntentId: string | null;
-  stripePriceId: string | null;
+  /** Razorpay subscription id (sub_...); null for lifetime. */
+  providerSubscriptionId: string | null;
+  /** Razorpay order id (order_...) for a lifetime purchase. */
+  providerCheckoutId: string | null;
+  /** Razorpay payment id (pay_...) for a lifetime purchase. */
+  providerPaymentId: string | null;
+  /** Razorpay plan id (plan_...). */
+  providerPlanId: string | null;
   amountCents: number;
   currency: string;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
 };
 
-/** Billing state, written only by the Stripe webhook and the reconcile job. */
+/** Billing state, written only by verified payments, the webhook and the reconcile job. */
 export interface BillingStore {
-  account(userId: string): Promise<{ plan: Plan; stripeCustomerId: string | null; subscriptions: Subscription[] }>;
+  account(userId: string): Promise<{ plan: Plan; customerId: string | null; subscriptions: Subscription[] }>;
   setCustomer(userId: string, customerId: string): Promise<void>;
   userByCustomer(customerId: string): Promise<string | null>;
   /** Records a webhook event id. "done" means it was already processed: skip it. */
   claimEvent(id: string, type: string): Promise<"new" | "retry" | "done">;
   finishEvent(id: string): Promise<void>;
-  /** Inserts or updates by Stripe id, then recomputes the user's plan and returns it. */
+  /** Inserts or updates by provider id, then recomputes the user's plan and returns it. */
   upsertSubscription(userId: string, s: Subscription): Promise<Plan>;
   /** Marks a lifetime purchase refunded; returns the user id, if any. */
-  refundLifetime(paymentIntentId: string): Promise<string | null>;
+  refundLifetime(paymentId: string): Promise<string | null>;
+  /** Subscriptions that may still change (for the reconcile job). */
+  openSubscriptions(): Promise<{ userId: string; providerSubscriptionId: string }[]>;
 }
 
 /** Rate limits, AI call counts and the scheduled jobs. */

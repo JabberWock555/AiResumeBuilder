@@ -23,7 +23,7 @@ try {
   process.loadEnvFile(".env.local");
 } catch {}
 const SUPABASE = process.argv.includes("--supabase");
-if (!SUPABASE && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+if (!SUPABASE && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.DATA_BACKEND !== "local") {
   console.log("Supabase keys are set, so the app uses Supabase, not .data/db.json.");
   console.log("To seed the Supabase project (development only): npm run seed -- --supabase");
   process.exit(0);
@@ -35,7 +35,7 @@ const PASSWORD = "demo-password-123";
 
 const empty = () => ({
   users: [], sessions: [], emailTokens: [], resumes: [], targets: [], usage: [], exports: [], aiLogs: [],
-  subscriptions: [], stripeEvents: [], jobRuns: [],
+  subscriptions: [], billingEvents: [], jobRuns: [],
 });
 const hash = (pw) => {
   const salt = randomBytes(16).toString("hex");
@@ -136,7 +136,7 @@ async function seedLocal() {
   const userId = randomUUID();
   db.users.push({
     id: userId, email: EMAIL, fullName: "Jordan Lee", plan: "free", theme: "system", appLanguage: "en-US",
-    onboarding: {}, createdAt: now, passwordHash: hash(PASSWORD), emailVerified: true, stripeCustomerId: null,
+    onboarding: {}, createdAt: now, passwordHash: hash(PASSWORD), emailVerified: true, billingCustomerId: null,
   });
   const resumeId = randomUUID();
   db.resumes.push({ id: resumeId, userId, folderId: null, ...resume, revision: 1, source: "scratch", lastScore: null, createdAt: now, updatedAt: now });

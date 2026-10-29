@@ -10,7 +10,7 @@ const PROCESSORS = [
   ["Supabase", "Database, sign-in and file storage", "Your account, resumes, job ads you paste, uploaded files"],
   ["Vercel", "Hosting, scheduled jobs, AI Gateway", "Every request to the app; the text sent to the AI"],
   ["Anthropic (through the Vercel AI Gateway)", "Writing suggestions and job-ad keywords", "The resume text and job ad for that one request"],
-  ["Stripe", "Payments", "Name, email, card details (we never see your card number), billing address"],
+  ["Razorpay", "Payments", "Name, email, phone, and the card, UPI or bank details you pay with (we never see them)"],
   ["Resend", "Sending email", "Your email address and the email we send you"],
   ["Google, Apple", "Sign-in, only if you choose it", "Your name and email from that account"],
 ];
@@ -52,7 +52,7 @@ export default function Privacy() {
       </section>
       <section className="flex flex-col gap-3">
         <h2 className="text-lg">Deleting your account</h2>
-        <p>Settings → Delete account removes everything at once: your resumes, job ads, uploaded files and usage, and it cancels any subscription. Stripe keeps payment records it’s required to keep by law.</p>
+        <p>Settings → Delete account removes everything at once: your resumes, job ads, uploaded files and usage, and it cancels any subscription. Razorpay keeps payment records it’s required to keep by law.</p>
       </section>
     </article>
   );

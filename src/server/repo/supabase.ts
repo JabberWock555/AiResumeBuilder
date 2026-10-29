@@ -21,8 +21,8 @@ type TargetRow = {
   dismissed: string[]; extracted_at: string | null; extraction_model: string | null;
 };
 type SubRow = {
-  user_id: string; kind: Subscription["kind"]; status: Subscription["status"]; stripe_subscription_id: string | null;
-  stripe_checkout_session_id: string | null; stripe_payment_intent_id: string | null; stripe_price_id: string | null;
+  user_id: string; kind: Subscription["kind"]; status: Subscription["status"]; provider_subscription_id: string | null;
+  provider_checkout_id: string | null; provider_payment_id: string | null; provider_plan_id: string | null;
   amount_cents: number; currency: string; current_period_end: string | null; cancel_at_period_end: boolean;
 };
 
@@ -57,10 +57,10 @@ const toTarget = (t: TargetRow): TargetJob => ({
 const toSub = (s: SubRow): Subscription => ({
   kind: s.kind,
   status: s.status,
-  stripeSubscriptionId: s.stripe_subscription_id,
-  stripeCheckoutSessionId: s.stripe_checkout_session_id,
-  stripePaymentIntentId: s.stripe_payment_intent_id,
-  stripePriceId: s.stripe_price_id,
+  providerSubscriptionId: s.provider_subscription_id,
+  providerCheckoutId: s.provider_checkout_id,
+  providerPaymentId: s.provider_payment_id,
+  providerPlanId: s.provider_plan_id,
   amountCents: s.amount_cents,
   currency: s.currency,
   currentPeriodEnd: s.current_period_end,
@@ -349,70 +349,70 @@ export const supabaseRepo: Repo = {
 };
 
 // ---------------------------------------------------------------------------
-// billing (service role: only the Stripe webhook, checkout and reconcile job)
+// billing (service role: only verified payments, the webhook and the reconcile job)
 
 export const supabaseBilling: BillingStore = {
   async account(userId) {
     const db = adminClient();
     const [p, s] = await Promise.all([
-      db.from("profiles").select("plan, stripe_customer_id").eq("id", userId).single(),
+      db.from("profiles").select("plan, billing_customer_id").eq("id", userId).single(),
       db.from("subscriptions").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
     ]);
     if (p.error) fail(p.error);
     if (s.error) fail(s.error);
-    return { plan: p.data.plan, stripeCustomerId: p.data.stripe_customer_id, subscriptions: (s.data as SubRow[]).map(toSub) };
+    return { plan: p.data.plan, customerId: p.data.billing_customer_id, subscriptions: (s.data as SubRow[]).map(toSub) };
   },
 
   async setCustomer(userId, customerId) {
-    const { error } = await adminClient().from("profiles").update({ stripe_customer_id: customerId }).eq("id", userId);
+    const { error } = await adminClient().from("profiles").update({ billing_customer_id: customerId }).eq("id", userId);
     if (error) fail(error);
   },
 
   async userByCustomer(customerId) {
-    const { data, error } = await adminClient().from("profiles").select("id").eq("stripe_customer_id", customerId).maybeSingle();
+    const { data, error } = await adminClient().from("profiles").select("id").eq("billing_customer_id", customerId).maybeSingle();
     if (error) fail(error);
     return data?.id ?? null;
   },
 
   async claimEvent(id, type) {
     const db = adminClient();
-    const { error } = await db.from("stripe_events").insert({ id, type });
+    const { error } = await db.from("billing_events").insert({ id, type });
     if (!error) return "new";
     if (error.code !== "23505") fail(error);
-    const { data, error: e2 } = await db.from("stripe_events").select("processed_at").eq("id", id).single();
+    const { data, error: e2 } = await db.from("billing_events").select("processed_at").eq("id", id).single();
     if (e2) fail(e2);
     return data.processed_at ? "done" : "retry";
   },
 
   async finishEvent(id) {
-    const { error } = await adminClient().from("stripe_events").update({ processed_at: new Date().toISOString() }).eq("id", id);
+    const { error } = await adminClient().from("billing_events").update({ processed_at: new Date().toISOString() }).eq("id", id);
     if (error) fail(error);
   },
 
   async upsertSubscription(userId, s) {
     const db = adminClient();
     const row = {
-      user_id: userId, kind: s.kind, status: s.status, stripe_subscription_id: s.stripeSubscriptionId,
-      stripe_payment_intent_id: s.stripePaymentIntentId, stripe_price_id: s.stripePriceId, amount_cents: s.amountCents,
+      user_id: userId, kind: s.kind, status: s.status, provider: "razorpay", provider_subscription_id: s.providerSubscriptionId,
+      provider_payment_id: s.providerPaymentId, provider_plan_id: s.providerPlanId, amount_cents: s.amountCents,
       currency: s.currency, current_period_end: s.currentPeriodEnd, cancel_at_period_end: s.cancelAtPeriodEnd,
-      ...(s.stripeCheckoutSessionId ? { stripe_checkout_session_id: s.stripeCheckoutSessionId } : {}),
+      ...(s.providerCheckoutId ? { provider_checkout_id: s.providerCheckoutId } : {}),
     };
     const { error } = await db
       .from("subscriptions")
-      .upsert(row, { onConflict: s.stripeSubscriptionId ? "stripe_subscription_id" : "stripe_checkout_session_id" });
+      .upsert(row, { onConflict: s.providerSubscriptionId ? "provider_subscription_id" : "provider_checkout_id" });
     if (error) fail(error);
     const { data, error: e2 } = await db.rpc("sync_plan", { p_user: userId });
     if (e2) fail(e2);
     return data as Plan;
   },
 
-  async refundLifetime(paymentIntentId) {
+  async refundLifetime(paymentId) {
     const db = adminClient();
     const { data, error } = await db
       .from("subscriptions")
       .update({ status: "refunded" })
       .eq("kind", "lifetime")
-      .eq("stripe_payment_intent_id", paymentIntentId)
+      .eq("provider_payment_id", paymentId)
       .select("user_id")
       .maybeSingle();
     if (error) fail(error);
@@ -420,6 +420,19 @@ export const supabaseBilling: BillingStore = {
     const { error: e2 } = await db.rpc("sync_plan", { p_user: data.user_id });
     if (e2) fail(e2);
     return data.user_id as string;
+  },
+
+  async openSubscriptions() {
+    const { data, error } = await adminClient()
+      .from("subscriptions")
+      .select("user_id, provider_subscription_id")
+      .not("provider_subscription_id", "is", null)
+      .not("status", "in", "(canceled,refunded)");
+    if (error) fail(error);
+    return (data as { user_id: string; provider_subscription_id: string }[]).map((r) => ({
+      userId: r.user_id,
+      providerSubscriptionId: r.provider_subscription_id,
+    }));
   },
 };
 

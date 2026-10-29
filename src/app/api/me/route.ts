@@ -3,7 +3,7 @@ import { auth, repo } from "@/server/repo";
 import { config } from "@/server/config";
 import { assertSameOrigin, body, handle } from "@/server/http";
 import { requireUser } from "@/server/session";
-import { deleteCustomer } from "@/server/billing/stripe";
+import { cancelAllNow } from "@/server/billing/razorpay";
 import { purgeUserFiles } from "@/server/storage";
 
 export const GET = handle(async () => {
@@ -30,9 +30,9 @@ export const DELETE = handle(async (req: Request) => {
   const { confirmEmail } = await body(req, z.object({ confirmEmail: z.string().max(160) }));
   if (confirmEmail.trim().toLowerCase() !== user.email) return Response.json({ error: "email_mismatch" }, { status: 400 });
   // In this order, so nothing is left behind if a step fails: stop billing
-  // (deleting the Stripe customer cancels its subscriptions), remove uploaded
-  // files, then the auth user, which cascades to every table.
-  if (config.billing) await deleteCustomer(user.id);
+  // (cancel every Razorpay subscription now), remove uploaded files, then the
+  // auth user, which cascades to every table.
+  if (config.billing) await cancelAllNow(user.id);
   await purgeUserFiles(user.id);
   await auth.deleteUser(user.id);
   return new Response(null, { status: 204 });

@@ -112,32 +112,38 @@ export async function secondUser(browser: import("@playwright/test").Browser) {
 }
 
 /**
- * Puts the signed-in user on a plan by sending a signed Stripe test event to
- * the local webhook, the same way Stripe would. Needs the dev server started
- * with the local-only secret (the "web-webhook-test" launch config, or
- * STRIPE_WEBHOOK_SECRET=whsec_local_webhook_check_only npm run dev).
+ * Puts the signed-in user on a plan by sending a signed Razorpay webhook to
+ * the local server, the same way Razorpay would. Needs the dev server started
+ * with the local-only secret and no Razorpay API keys (the "web-webhook-test"
+ * launch config does both).
  */
-export const WEBHOOK_SECRET = "whsec_local_webhook_check_only";
-export async function sendStripeEvent(request: APIRequestContext, type: string, object: Record<string, unknown>) {
-  const Stripe = (await import("stripe")).default;
-  const payload = JSON.stringify({ id: `evt_e2e_${Date.now()}_${randomBytes(4).toString("hex")}`, object: "event", type, data: { object } });
-  const header = Stripe.webhooks.generateTestHeaderString({ payload, secret: WEBHOOK_SECRET });
-  const res = await request.post("/api/webhooks/stripe", { data: payload, headers: { "stripe-signature": header, "content-type": "application/json" } });
-  expect(res.status(), "start the dev server with the local webhook secret (see e2e/helpers.ts)").toBe(200);
+export const WEBHOOK_SECRET = "local_razorpay_webhook_check_only";
+export async function sendRazorpayEvent(request: APIRequestContext, event: string, payload: Record<string, unknown>) {
+  const { createHmac } = await import("node:crypto");
+  const body = JSON.stringify({ entity: "event", event, payload, created_at: Math.floor(Date.now() / 1000) });
+  const signature = createHmac("sha256", WEBHOOK_SECRET).update(body).digest("hex");
+  const res = await request.post("/api/webhooks/razorpay", {
+    data: body,
+    headers: { "x-razorpay-signature": signature, "x-razorpay-event-id": `evt_e2e_${Date.now()}_${randomBytes(4).toString("hex")}`, "content-type": "application/json" },
+  });
+  expect(res.status(), "start the dev server with the web-webhook-test launch config (see e2e/helpers.ts)").toBe(200);
   return res.json();
 }
 
 export function subscription(userId: string, over: Record<string, unknown> = {}) {
   return {
-    id: `sub_e2e_${userId.slice(0, 8)}`, object: "subscription", customer: `cus_e2e_${userId.slice(0, 8)}`, status: "active", currency: "usd",
-    cancel_at_period_end: false, cancel_at: null, metadata: { user_id: userId, plan: "month" },
-    items: { data: [{ price: { id: "price_e2e_month", unit_amount: 1500 }, current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400 }] },
-    ...over,
+    subscription: {
+      entity: {
+        id: `sub_e2e${userId.slice(0, 8)}`, entity: "subscription", plan_id: "plan_e2e_month", customer_id: `cust_e2e${userId.slice(0, 8)}`,
+        status: "active", current_end: Math.floor(Date.now() / 1000) + 30 * 86400, notes: { user_id: userId, plan: "month" },
+        ...over,
+      },
+    },
   };
 }
 
 export async function makePro(page: Page) {
   const me = await (await page.request.get("/api/me")).json();
-  await sendStripeEvent(page.request, "customer.subscription.created", subscription(me.user.id));
+  await sendRazorpayEvent(page.request, "subscription.activated", subscription(me.user.id));
   return me.user.id as string;
 }

@@ -2,7 +2,7 @@ feature,area,priority,original,clone,notes
 Sign up and log in with email and password,auth,must,yes,yes,S05 S06; Supabase Auth (or the local stand-in without keys); email confirmed before the first sign-in; same answer for new and taken emails; rate limited
 Sign in with Google,auth,must,yes,partial,code done (/auth/oauth/google → /auth/callback); switches on with your Google OAuth client in Supabase + AUTH_OAUTH_PROVIDERS=google; not yet run against Google
 Password reset and change email,auth,must,yes,yes,S14; both by emailed link to /auth/confirm (tested end to end on the local outbox); a reset signs out other devices
-Delete account,auth,must,yes,yes,"S14 typed-email confirm; deletes the Stripe customer, empties storage, then the auth user (cascades every table)"
+Delete account,auth,must,yes,yes,"S14 typed-email confirm; cancels Razorpay subscriptions now, empties storage, then the auth user (cascades every table)"
 Dashboard listing resumes with sort and grid or list view,dashboard,must,yes,yes,S11; S11 with live thumbnails and score
 Rename duplicate and delete a resume,dashboard,must,yes,yes,card menu; card menu; delete confirms
 Free usage meter in the sidebar (resumes and AI generations),billing,must,yes,yes,S11 shows 0/1 and 0/10; also PDF downloads
@@ -26,9 +26,9 @@ Finish Up page with paged live preview and keyword highlights,preview,must,yes,y
 Templates with filters by format,templates,must,yes,partial,S28; our own designs; 3 templates; no format filters yet
 Formatting: font font size spacing divider indent text and accent colour,templates,must,yes,partial,"S27; font, size, spacing, divider, heading colour, paper size; no indent or text colour"
 PDF download with a quota on Free,export,must,yes,yes,S29; S29; real text layer; re-downloading an unchanged resume is free
-Pro subscription through Stripe with monthly quarterly and lifetime,billing,should,yes,partial,"S17; Checkout, webhooks (signature, idempotent, plan sync) and reconcile job built; webhooks tested with signed events; Checkout needs your Stripe test keys"
+Pro subscription with monthly quarterly and lifetime,billing,should,yes,partial,"S17; Razorpay Subscriptions + lifetime Order, Checkout.js modal, verified on our server, idempotent webhooks, reconcile job; tested with signed webhooks; needs working test keys and plans"
 Prices in local currency,billing,should,yes,no,S17 INR
-Manage billing via Stripe Customer Portal,billing,should,yes,partial,S14; portal + one-click cancel built; needs your Stripe test keys
+"Manage billing (receipts, payment method)",billing,should,yes,partial,S14; Razorpay has no customer portal: it emails receipts and a pay-another-way link when a renewal fails
 Optional sections: projects certifications coursework involvement,editor,should,yes,yes,S23; S23 menu
 Optional sections: awards publications references military service,editor,should,yes,no,S23 Pro in original
 Personalised field labels using the company name,editor,should,yes,yes,S19 small but delightful
@@ -72,5 +72,5 @@ Auto-apply on Greenhouse and Lever,jobs,could,yes,skip,terms and abuse risk
 Paid human resume review priced per word,review,could,yes,skip,S34 needs real reviewers
 Their templates sample library and placeholder content,content,could,yes,skip,owned by them
 User counts interview-rate stats and testimonials,marketing,could,yes,skip,their proof; never reuse
-Cancel a plan in one click in Settings (and undo),billing,should,no,partial,S14; cancels at period end; needs Stripe keys; recon: hard-to-cancel billing is a top complaint
+Cancel a plan in one click in Settings,billing,should,no,partial,S14; cancels at period end; Razorpay can't undo a cancellation; needs working Razorpay keys; recon: hard-to-cancel billing is a top complaint
 Sign out everywhere,auth,should,no,yes,S14; ends every session on every device

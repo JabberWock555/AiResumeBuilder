@@ -2,7 +2,7 @@
 
 Reads `replica/architecture.md`. Status on 2026-10-13: everything below is
 built and tested on the local stand-ins. The pieces that need your accounts
-(Supabase, Stripe, Resend, Google, the AI Gateway) switch on when their keys
+(Supabase, Razorpay, Resend, Google, the AI Gateway) switch on when their keys
 are in `.env.local`, and **have not been run against the real services yet**,
 because Claude doesn't create accounts or handle keys. The checks to run once
 they're in are at the end of each section.
@@ -16,7 +16,9 @@ they're in are at the end of each section.
 | database + sign-in | Supabase (`src/server/repo/supabase.ts`, `src/server/auth/supabase.ts`) | JSON file `.data/db.json` with the same rules (`src/server/repo/fake.ts`) |
 | AI writer | AI Gateway: Haiku 4.5 inline, Sonnet 5.5 for the rest | deterministic demo writer |
 | email | Resend | written to `.data/outbox.jsonl` |
-| payments | Stripe (test keys until `/replica-deploy`) | upgrade dialog says payments are off |
+| payments | Razorpay (test keys until `/replica-deploy`) | upgrade dialog says payments are off |
+
+`DATA_BACKEND=local` forces the local stand-ins even when the Supabase keys are set. The `web-webhook-test` launch config uses it, plus empty Razorpay keys, to run the e2e tests.
 | Google / Apple sign-in | when listed in `AUTH_OAUTH_PROVIDERS` | buttons hidden |
 
 Every screen and route talks to the same interfaces (`Repo`, `AuthProvider`,
@@ -42,14 +44,11 @@ Copy `.env.example` to `.env.local` and fill it in as you go.
 2. **Resend.** Add your sending domain (it gives you the SPF, DKIM and DMARC records; `/replica-deploy` puts them in DNS).
    - Create an API key and set `RESEND_API_KEY` and `EMAIL_FROM`.
    - In Supabase → Authentication → Emails → SMTP, enter Resend's SMTP details, so sign-up and reset emails come from your domain. Supabase's built-in sender is rate-limited to a handful of emails an hour and is only for testing.
-3. **Stripe, test mode.**
-   - Create one product, "Pro", with three prices: monthly, every 3 months, and a one-off lifetime price. Put their ids in `STRIPE_PRICE_*`.
-   - Add a webhook endpoint for `/api/webhooks/stripe` with the 7 events below. Locally, use `stripe listen --forward-to localhost:3000/api/webhooks/stripe` and its `whsec_`.
-   - In the Customer Portal settings:
-     - allow cancelling, **at the end of the period**;
-     - allow switching between the monthly and 3-month prices;
-     - allow updating the payment method.
-   - Optional: turn on Adaptive Pricing for local currencies.
+3. **Razorpay, test mode.** Keys go in `RAZORPAY_API_KEY` (the `rzp_test_…` key id) and `RAZORPAY_SECRET_KEY`.
+   - Subscriptions → Plans: create a monthly plan (period monthly, interval 1) and a 3-monthly plan (period monthly, interval 3). Put their ids in `RAZORPAY_PLAN_MONTH` and `RAZORPAY_PLAN_QUARTER`.
+   - Lifetime is a one-off order: set its price in paise in `RAZORPAY_LIFETIME_AMOUNT` (499900 = ₹4,999).
+   - Account & Settings → Webhooks: URL `https://<your app>/api/webhooks/razorpay`, a secret you choose (the same value goes in `RAZORPAY_WEBHOOK_SECRET`), and the 12 events below.
+   - Razorpay can't send webhooks to localhost. Locally the plan still switches on straight after payment (the checkout result is verified on our server). Renewals and cancellations need a tunnel: Razorpay's docs suggest `zrok`, since many tunnelling services are blocked.
 4. **Google sign-in.** In Google Cloud, create an OAuth client (Web).
    - Use the scopes `openid`, `email` and `profile` only.
    - Set the redirect URI to `https://<project-ref>.supabase.co/auth/v1/callback`.
@@ -76,7 +75,7 @@ Copy `.env.example` to `.env.local` and fill it in as you go.
   - `src/proxy.ts` refreshes the access token before each page.
 - **Sign out everywhere** is in Settings and ends every session, including this one.
 - Account deletion (Settings, typed-email confirm) runs in this order:
-  1. deletes the Stripe customer, which cancels its subscriptions;
+  1. cancels every Razorpay subscription immediately (Razorpay has no API to delete a customer);
   2. empties the user's storage folders;
   3. deletes the auth user, which cascades to every table.
   The walkthrough checks nothing is left.
@@ -89,13 +88,13 @@ Copy `.env.example` to `.env.local` and fill it in as you go.
   - `0002_backend.sql` adds:
     - `record_export()`;
     - service-only `refund_quota_now()` and `sync_plan()`;
-    - Stripe ids for refunds;
+    - payment-provider ids for refunds (renamed to provider-neutral names in `0003_razorpay.sql`);
     - `rate_limits` and `hit_rate_limit()`;
     - `job_runs` (the dead-letter log);
     - the prune functions.
   - `npm run db:migrate` applies them in order, each in a transaction. It records them where the Supabase CLI does, so `supabase db push` also works later.
 - **Access rules:** row level security on all 14 tables. User actions run on the signed-in user's client, so RLS applies, and every query also filters by `user_id`. The service role is used only for:
-  - the Stripe webhook;
+  - verified payments and the Razorpay webhook;
   - cron jobs;
   - refunds;
   - AI logs;
@@ -111,33 +110,36 @@ Copy `.env.example` to `.env.local` and fill it in as you go.
 - **Seed:** `npm run seed` (local) or `npm run seed -- --supabase`. One made-up person (Jordan Lee), one resume and one job ad. It refuses to run against a production deployment.
 - **Backups:** Supabase's daily backups come with the Pro plan, which keeps 7 days. The Free plan has none you can restore from. **Before launch:** move the project to Pro (or add point-in-time recovery), then check Database → Backups shows a backup from the last 24 hours. Not checked yet.
 
-## Payments (Stripe)
+## Payments (Razorpay)
 
-- **Start:** `POST /api/billing/checkout {plan}` opens Stripe Checkout.
-  - Subscription mode for `month` and `quarter`, payment mode for `lifetime`.
-  - The user id goes in `client_reference_id` and in the subscription or payment metadata.
-  - If you're already on a paid plan, it's refused and points to the portal instead, so nobody pays twice.
-- **Change card or plan:** `POST /api/billing/portal` opens the Customer Portal.
-- **Cancel in one click:** Settings → Cancel plan → confirm. It cancels at the period end, and **Keep my plan** undoes it (`POST /api/billing/cancel`). There are no card forms anywhere.
-- **Webhook** (`/api/webhooks/stripe`):
-  - The signature is checked against the raw body first.
-  - The event id is stored in `stripe_events`; one already processed is skipped, and one that failed half-way runs again.
-  - Every write is an upsert keyed by a Stripe id. Subscription events re-fetch the subscription from Stripe, so out-of-order events can't store stale state.
-  - The plan is recomputed from all of the user's subscriptions by `sync_plan()`. The app reads the plan from the database, never from the client.
-  - Events handled:
-    - `checkout.session.completed`
-    - `checkout.session.async_payment_succeeded`
-    - `customer.subscription.created`, `.updated` and `.deleted`
-    - `invoice.payment_failed` (sends one email per invoice; Pro stays on while Stripe retries)
-    - `charge.refunded` (a full refund of a lifetime purchase drops to Free)
-- **Reconcile job:** daily, it replays the last 48 hours of Stripe events through the same handler, which fixes anything a missed webhook left behind.
+Switched from Stripe on 2026-10-30, at your request. `0003_razorpay.sql` renames the billing columns to provider-neutral names.
+
+- **Paying:** `POST /api/billing/checkout {plan}` creates a Razorpay subscription (monthly or 3-monthly) or a one-off order (lifetime). The upgrade dialog then opens **Razorpay Checkout**, their modal for card, UPI and netbanking. No payment details touch our servers.
+  - A user already on a paid plan is refused, so nobody pays twice.
+  - Subscriptions run for 10 years of cycles (120 monthly or 40 quarterly), because Razorpay needs a fixed count.
+- **Instant upgrade:** Checkout's success result goes to `POST /api/billing/verify`.
+  - The server checks Razorpay's signature: HMAC of `payment_id|subscription_id`, or `order_id|payment_id` for orders, with the key secret.
+  - It re-fetches the subscription or order and checks it belongs to this user.
+  - Then it switches the plan on. Lifetime payments left "authorized" (manual capture) are captured here.
+- **Cancel:** one click in Settings, at the end of the paid period (`POST /api/billing/cancel`). **Razorpay can't undo a cancellation**, so there's no "Keep my plan"; the dialog says you can subscribe again after it ends.
+  - Razorpay has no customer portal. It emails receipts, and when a renewal fails it emails the customer a link to pay another way.
+- **Webhook** (`/api/webhooks/razorpay`):
+  - The `X-Razorpay-Signature` (HMAC-SHA256 of the raw body) is checked first.
+  - `x-razorpay-event-id` goes into `billing_events`; an event already processed is skipped, and one that failed half-way runs again.
+  - Subscription events re-fetch the subscription, so out-of-order events can't store stale state. The plan is recomputed by `sync_plan()`.
+  - Events to tick in the dashboard:
+    - `subscription.authenticated`, `.activated`, `.charged`, `.pending`, `.halted`, `.cancelled`, `.completed`, `.updated`, `.paused`, `.resumed`
+    - `order.paid` (lifetime)
+    - `refund.processed` (a full refund of a lifetime purchase drops to Free)
+  - Statuses map like this:
+    - `pending` (a renewal failed, Razorpay is retrying) keeps Pro and sends one email;
+    - `halted` (retries ran out), `cancelled`, `completed` and `expired` go back to Free;
+    - `created` and `authenticated` aren't Pro yet.
+- **Reconcile job:** daily, it re-reads every open subscription from Razorpay. Razorpay has no "list recent events" API to replay.
 - **Tested:**
-  - `npm test`: 12 handler tests (ordering, retries, half-failed events, cancel, past due, lifetime, refunds) plus 2 signature tests.
-  - `npm run webhook:check`: 11 signed events through the real route on the dev server; the plan and the Settings page changed as expected. **11/11 pass.**
-  - Checkout and the portal haven't been run: they need your test keys. Then run:
-    - `stripe trigger checkout.session.completed`;
-    - a test card checkout from the upgrade dialog;
-    - cancel and undo in Settings.
+  - `npm test`: 10 handler tests (statuses, idempotency, retries, out-of-order, cancel flag, lifetime and refunds) plus 2 signature tests.
+  - e2e F06 and F09: signed Razorpay webhooks through the real route on the dev server; Settings shows each state.
+  - **Not run against Razorpay yet:** the keys in `.env.local` are refused (401, see below).
 
 ## Email and jobs
 
@@ -154,8 +156,8 @@ Copy `.env.example` to `.env.local` and fill it in as you go.
 | --- | --- | --- |
 | cleanup-imports | hourly | deletes uploaded files once parsed, or after 24 h. Import isn't built yet, so this has nothing to do |
 | prune-versions | daily 03:00 | keeps 50 versions per resume plus the last 7 days. Version history isn't built yet |
-| reconcile-billing | daily 04:00 | replays 48 h of Stripe events |
-| prune-logs | Sunday 05:00 | deletes AI logs older than 180 days, rate-limit windows older than a day, processed Stripe events and job runs older than 90 days |
+| reconcile-billing | daily 04:00 | re-reads every open subscription from Razorpay |
+| prune-logs | Sunday 05:00 | deletes AI logs older than 180 days, rate-limit windows older than a day, processed billing events and job runs older than 90 days |
 
 ## AI
 
@@ -177,7 +179,7 @@ Copy `.env.example` to `.env.local` and fill it in as you go.
 | Supabase Auth + Postgres + Storage | supabase-js, `@supabase/ssr` | anon key (RLS) and service role (server only) | none | auth email limits apply until custom SMTP is set; set "emails per hour" after Resend |
 | Google sign-in | OAuth 2.0 via Supabase | `openid email profile` only | Basic scopes need no security review. Brand verification of the consent screen (your name and logo, privacy policy URL, authorised domain) takes days, so start it as soon as the domain exists. A Supabase custom domain makes the consent screen show your domain | Google's defaults are ample for sign-in |
 | Sign in with Apple | via Supabase | name, email | Apple Developer Program membership. If an iOS app ever offers Google sign-in, App Store rules require Apple sign-in too; account deletion is already in place | — |
-| Stripe | Checkout, Billing, Customer Portal, webhooks | restricted key possible later | Account activation (business details) before live mode, in `/replica-deploy` | API rate limits are generous; the SDK retries twice |
+| Razorpay | Orders, Subscriptions, Plans, Payments, Checkout.js, webhooks (`razorpay` SDK 2.9.8) | key id + secret, server only | Account activation (KYC: business and bank details) before live mode, in `/replica-deploy`. Subscriptions may need to be enabled on the account | per-key API rate limits; webhooks retried by Razorpay |
 | Resend | HTTP API + SMTP for Supabase | sending only | Domain verification (DNS) | per-second API limit on the default plan; one email per user action here |
 | Vercel AI Gateway | AI SDK 7 `generateText` | gateway key or OIDC | none. Model providers' usage policies apply | per-model limits; cost tracked in the gateway |
 | Google Drive export (could, not built) | Drive API | `drive.file` only (files the app creates). Check Google's current classification first: a sensitive scope needs Google's OAuth verification, **which takes weeks**, so apply when this is scheduled, not at launch | — | — |
@@ -205,7 +207,7 @@ Copy `.env.example` to `.env.local` and fill it in as you go.
   - Keys are HMAC hashes, so no emails or IPs are stored.
   - The walkthrough checks that the 11th wrong password is refused.
   - The SMS part of the checklist doesn't apply: no SMS.
-- [x] **Webhooks verify signatures** (unit tests, and a wrong-secret request is refused in `webhook:check` and the walkthrough).
+- [x] **Webhooks verify signatures** (unit tests; unsigned and wrongly signed requests are refused in e2e F06-N2 and the walkthrough).
 - [ ] **Uploads: size and type limits, separate bucket.** Import and photos aren't built yet. The buckets are already private with size and type limits (5 MB PDF/DOCX, 2 MB images) and per-user folder rules, and the cleanup job is ready. When import is built, also check the file's first bytes on the server.
 - [x] **No user data in URLs or logs.**
   - Email-link tokens are one-time hashes.
@@ -215,18 +217,17 @@ Copy `.env.example` to `.env.local` and fill it in as you go.
 - [x] **Dependencies audited.**
   - `npm run audit:prod`: 0 vulnerabilities (2026-10-24, after Next.js 16.4.1, zod 4.6.6 and puppeteer-core 25.13.0 for new advisories; see `replica/bugs.md` BUG-002). Re-run before every deploy.
   - Dev-only findings remain in eslint's dependency chain; fixing them would downgrade `eslint-config-next`.
-- [x] **Privacy policy lists every processor:** Supabase, Vercel, Anthropic via the gateway, Stripe, Resend, Google and Apple. `/privacy` is a **draft for legal review**.
+- [x] **Privacy policy lists every processor:** Supabase, Vercel, Anthropic via the gateway, Razorpay, Resend, Google and Apple. `/privacy` is a **draft for legal review**.
 
 ## Tests
 
 | check | result |
 | --- | --- |
 | `npm run test:schema` (migrations, RLS, quotas, billing, jobs) | 44 / 44 |
-| `npm test` (fact guard, Stripe events, signatures) | 19 / 19 |
+| `npm test` (fact guard, Razorpay events, signatures, sign-up email failure) | 23 / 23 |
 | `npm run walkthrough` (sign-up by emailed link, editor, AI, PDF, quotas, second-user isolation, change email, reset password, rate limit, sign out everywhere, delete account, axe, 390 px) | 46 / 46 |
-| `npm run webhook:check` (signed events through the real route) | 11 / 11 |
 | `npm run lint`, `tsc`, `npm run build` | pass |
 | `npm run check:supabase` | not run: needs your Supabase project |
-| Stripe Checkout and portal, Google sign-in, Resend delivery, AI Gateway calls | not run: need your keys |
+| Razorpay Checkout and cancel, Google sign-in, Resend delivery, AI Gateway calls | not run: need working keys |
 
 Next: `/replica-test`.

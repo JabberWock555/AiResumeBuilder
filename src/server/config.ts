@@ -7,9 +7,17 @@ import "server-only";
 const env = process.env;
 
 export const config = {
-  /** Supabase (Postgres + Auth) when its keys are set; the local JSON file otherwise. */
-  backend: env.NEXT_PUBLIC_SUPABASE_URL && env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? ("supabase" as const) : ("fake" as const),
-  billing: Boolean(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET && env.STRIPE_PRICE_MONTH),
+  /**
+   * Supabase (Postgres + Auth) when its keys are set; the local JSON file
+   * otherwise. DATA_BACKEND=local forces the local file even with keys set
+   * (end-to-end tests read emails from the local outbox).
+   */
+  backend:
+    env.DATA_BACKEND !== "local" && env.NEXT_PUBLIC_SUPABASE_URL && env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      ? ("supabase" as const)
+      : ("fake" as const),
+  /** Razorpay: key id + secret and at least the monthly plan. */
+  billing: Boolean(env.RAZORPAY_API_KEY && env.RAZORPAY_SECRET_KEY && env.RAZORPAY_PLAN_MONTH),
   /** The AI Gateway reads AI_GATEWAY_API_KEY, or the OIDC token Vercel injects. */
   ai: Boolean(env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN),
   email: Boolean(env.RESEND_API_KEY && env.EMAIL_FROM),

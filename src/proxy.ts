@@ -11,7 +11,8 @@ import { createServerClient } from "@supabase/ssr";
 const COOKIE_OPTIONS = { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax" as const, path: "/" };
 
 export async function proxy(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  // Same switch as src/server/config.ts (that module is server-only).
+  const url = process.env.DATA_BACKEND === "local" ? undefined : process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const protectedPath = request.nextUrl.pathname.startsWith("/app");
 

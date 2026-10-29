@@ -17,7 +17,7 @@ Reads `replica/recon.md` (screens S01-S36, flows F01-F10) and
 | PDF | HTML/CSS templates printed by headless Chromium (`puppeteer-core` + `@sparticuz/chromium`) in a Node function | the preview and the PDF are the same HTML, so they match, and the PDF has a real text layer for ATS |
 | DOCX | `docx` npm package, built from the same document | Word users need an editable file; it follows the template's structure, not pixel for pixel |
 | file parsing | `unpdf` (PDF text), `mammoth` (DOCX text), then the LLM into the zod schema | standard libraries; the LLM only maps text to fields |
-| payments | Stripe Checkout + Billing + Customer Portal | monthly and quarterly subscriptions, a one-off lifetime payment, and cancel in one click; Adaptive Pricing for local currency (S17) |
+| payments | **Razorpay** (changed from Stripe on 2026-10-30): Subscriptions + Orders + Checkout.js + webhooks. See `replica/backend.md` | monthly and quarterly subscriptions, a one-off lifetime payment, and cancel in one click; Adaptive Pricing for local currency (S17) |
 | email | Resend, as Supabase Auth's SMTP | sign-up, reset and receipt emails from your own domain |
 | jobs | Vercel Cron, configured in `vercel.ts` | 4 small scheduled jobs; nothing needs a queue yet |
 | files | Supabase Storage, private buckets `imports` and `photos` | uploads go straight from the browser with a per-user folder rule |
@@ -27,8 +27,12 @@ Reads `replica/recon.md` (screens S01-S36, flows F01-F10) and
 
 One database, one app, no microservices.
 
+> **Payments changed to Razorpay** (2026-10-30). Where this plan says Stripe,
+> read Razorpay; `replica/backend.md` has the current design. The billing
+> columns were renamed to provider-neutral names in `0003_razorpay.sql`.
+
 **The user creates these accounts and keys** (Claude never signs up or types a
-key): Supabase project, Stripe account (test mode first), Google OAuth client,
+key): Supabase project, Razorpay account (test mode first), Google OAuth client,
 Resend, Vercel project with an AI Gateway key. Claude writes `.env.example`.
 
 ```
@@ -151,9 +155,10 @@ Route handlers under `app/api`. All require a signed-in user unless marked.
 | POST /api/imports | register an upload and get a signed upload URL (quota: import) | user | `{fileName, mimeType, sizeBytes}` | `{importId, uploadUrl}` | F02 |
 | POST /api/imports/:id/parse | extract text, map to the document, create the resume | owner | `{name, experienceLevel}` | `{resumeId}` or `{error: 'no_text' \| 'too_long' \| ...}` | F02 |
 | POST /api/exports | render PDF or DOCX (quota unless this revision was exported before) | owner | `{resumeId, format, revision}` | the file (`application/pdf` or `.docx`) | F01 |
-| POST /api/billing/checkout | start Stripe Checkout | user | `{plan: 'month' \| 'quarter' \| 'lifetime'}` | `{url}` | F06 |
-| POST /api/billing/portal | open the Stripe Customer Portal | user | — | `{url}` | F09 |
-| POST /api/webhooks/stripe | sync subscriptions and plan | Stripe (signature) | Stripe event | 200 | F06 F09 |
+| POST /api/billing/checkout | create the Razorpay subscription or lifetime order | user | `{plan: 'month' \| 'quarter' \| 'lifetime'}` | what Razorpay Checkout needs to open | F06 |
+| POST /api/billing/verify | check Checkout's signature and switch the plan on | user | Razorpay's success result | `{plan}` | F06 |
+| POST /api/billing/cancel | cancel at the end of the period (can't be undone in Razorpay) | user | — | 200 | F09 |
+| POST /api/webhooks/razorpay | sync subscriptions and plan | Razorpay (signature) | Razorpay event | 200 | F06 F09 |
 | GET /api/me | profile, plan, usage and limits for the sidebar meter | user | — | `{profile, plan, usage: {kind: {used, max}}}` | F01 |
 | PATCH /api/me | name, app language, theme, onboarding answers | user | `{fullName?, appLanguage?, theme?, onboarding?}` | profile | F01 |
 | DELETE /api/me | delete the account: Stripe, storage, then the auth user | user | `{confirmEmail}` | 204 | — |

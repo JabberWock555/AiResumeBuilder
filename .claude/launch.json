@@ -14,7 +14,11 @@
       "name": "web-webhook-test",
       "runtimeExecutable": "/usr/bin/env",
       "runtimeArgs": [
-        "STRIPE_WEBHOOK_SECRET=whsec_local_webhook_check_only",
+        "DATA_BACKEND=local",
+        "NEXT_PUBLIC_APP_URL=",
+        "RAZORPAY_API_KEY=",
+        "RAZORPAY_SECRET_KEY=",
+        "RAZORPAY_WEBHOOK_SECRET=local_razorpay_webhook_check_only",
         "npm",
         "run",
         "dev"
@@ -26,7 +30,7 @@
       "runtimeExecutable": "/bin/sh",
       "runtimeArgs": [
         "-c",
-        "npm run build && NEXT_PUBLIC_APP_URL=http://localhost:3200 PRINT_TOKEN_SECRET=local-prod-check-only EMAIL_OUTBOX=1 STRIPE_WEBHOOK_SECRET=whsec_local_webhook_check_only npx next start -p 3200"
+        "npm run build && NEXT_PUBLIC_APP_URL=http://localhost:3200 PRINT_TOKEN_SECRET=local-prod-check-only EMAIL_OUTBOX=1 npx next start -p 3200"
       ],
       "port": 3200
     }
