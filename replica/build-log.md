@@ -36,7 +36,8 @@ Run it: `npm run seed -- --reset` (demo login is in `scripts/seed.mjs`),
 | S28 templates picker | 2026-10-06 | partial | format filters, saved/recent | — |
 | S29 download | 2026-10-06 | done (PDF) | DOCX, Drive | the shared Chrome died once and kept failing: now relaunches on disconnect |
 | S30-S35 phase 2 | 2026-10-06 | placeholders | cover letters, agent, jobs, interview, examples | — |
-| S36 import | — | not built | should-have | — |
+| S36 import | 2026-10-31 | done (via Profile) | drag and drop on the dashboard | PDF and Word text loses bullet markers: roles are found by their date lines instead |
+| Profile (ours) | 2026-10-31 | done | — | reuses the resume section forms through the editor context, with its own autosave address |
 
 ## Things that were bigger than they looked
 

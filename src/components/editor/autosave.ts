@@ -42,7 +42,11 @@ export function takeDraft(resumeId: string, serverRevision: number): { patch: Re
  * is queued; every PATCH carries the revision it was based on, and a 409
  * means another tab changed the resume.
  */
-export function useAutosave(resumeId: string, initialRevision: number, delay = 800) {
+/**
+ * `resumeId` names the document (and its on-device draft). `url` is where it
+ * saves: a resume by default, or "/api/profile" for the saved profile.
+ */
+export function useAutosave(resumeId: string, initialRevision: number, delay = 800, url = `/api/resumes/${resumeId}`) {
   const revision = useRef(initialRevision);
   const pending = useRef<ResumePatch | null>(null);
   const inflight = useRef<Promise<void> | null>(null);
@@ -59,7 +63,7 @@ export function useAutosave(resumeId: string, initialRevision: number, delay = 8
       setStatus("saving");
       const p = (async () => {
         try {
-          const r = await api<{ revision: number }>(`/api/resumes/${resumeId}`, {
+          const r = await api<{ revision: number }>(url, {
             method: "PATCH",
             body: { revision: revision.current, ...patch },
           });
@@ -83,7 +87,7 @@ export function useAutosave(resumeId: string, initialRevision: number, delay = 8
         inflight.current = null;
       }
     }
-  }, [resumeId]);
+  }, [resumeId, url]);
 
   const queue = useCallback(
     (patch: ResumePatch) => {

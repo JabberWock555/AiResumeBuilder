@@ -50,3 +50,44 @@ test("live Supabase: log in, edit, autosave, reload, PDF", async ({ page }) => {
   }
   expect(errors, "console errors or 5xx").toEqual([]);
 });
+
+test("live Supabase: profile from an uploaded resume, then a resume for a job from it", async ({ page }) => {
+  const { createClient } = await import("@supabase/supabase-js");
+  const { randomBytes } = await import("node:crypto");
+  const path = await import("node:path");
+  try {
+    process.loadEnvFile(".env.local");
+  } catch {}
+  const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
+  const email = `live-profile-${randomBytes(4).toString("hex")}@example.com`;
+  const password = randomBytes(16).toString("base64url");
+  const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: "Live Check" } });
+  expect(error).toBeNull();
+  try {
+    await page.goto("/login");
+    await page.waitForLoadState("networkidle");
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Password").fill(password);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
+
+    await page.goto("/app/profile");
+    await page.getByLabel("Resume file (PDF or Word)").setInputFiles(path.join(process.cwd(), "e2e", "fixtures", "sample-resume.pdf"));
+    await expect(page.getByText(/We found 2 roles/)).toBeVisible({ timeout: 30_000 });
+    await page.getByLabel("City").fill("Mysuru");
+    await expect(page.getByRole("status").filter({ hasText: /^Saved$/ }).first()).toBeVisible({ timeout: 20_000 });
+    const { data: row } = await admin.from("profiles").select("master_content, master_revision").eq("id", data.user!.id).single();
+    expect(row!.master_content.contact.fullName).toBe("Priya Raman");
+    expect(row!.master_content.contact.city).toBe("Mysuru");
+
+    const r = await page.request.post("/api/resumes", { data: { target: { title: "Data Analyst", company: "Fernway", description: "We need a Data Analyst who writes SQL every day and builds dashboards in Tableau for product teams." } } });
+    expect(r.status()).toBe(201);
+    const { id } = await r.json();
+    const got = await (await page.request.get(`/api/resumes/${id}`)).json();
+    expect(got.resume.name).toBe("Priya Raman – Data Analyst at Fernway");
+    expect(got.resume.content.contact.city).toBe("Mysuru");
+    expect(got.target.keywords.length).toBeGreaterThan(0);
+  } finally {
+    await admin.auth.admin.deleteUser(data.user!.id);
+  }
+});

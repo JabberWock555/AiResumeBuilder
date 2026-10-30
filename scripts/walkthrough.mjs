@@ -161,7 +161,7 @@ try {
   await page.locator('[role="dialog"]').wait();
   await click('[role="dialog"] button[type="submit"]');
   ok("S12 validates", await page.locator("::-p-text(Choose the level closest)").wait().then(() => true, () => false));
-  await fill("::-p-aria(Resume name)", "Riley Walker – Data Analyst at Fernway Logistics Group, Austin office");
+  await fill("::-p-aria(Resume name (optional))", "Riley Walker – Data Analyst at Fernway Logistics Group, Austin office");
   // Keyboard, like a keyboard-only user: open the select, type to jump, Enter.
   await page.locator("::-p-aria(Experience level)").setTimeout(5000).wait();
   await page.focus('[role="dialog"] button[role="combobox"]');
@@ -170,7 +170,6 @@ try {
   await page.keyboard.type("Junior");
   await page.keyboard.press("Enter");
   ok("experience level picked by keyboard", await page.locator("::-p-text(Junior)").wait().then(() => true, () => false));
-  await click("::-p-aria(Tailor it to a job ad)");
   await fill("::-p-aria(Job title)", "Data Analyst");
   await fill("::-p-aria(Company)", "Fernway");
   await fill(

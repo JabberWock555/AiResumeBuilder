@@ -147,6 +147,19 @@ Switched from Stripe on 2026-10-30, at your request. `0003_razorpay.sql` renames
   - e2e F06 and F09: signed Razorpay webhooks through the real route on the dev server; Settings shows each state.
   - **Against your Razorpay test account (2026-10-31):** keys accepted. `/api/billing/plans` serves ₹299, ₹499 and ₹4,999. Continue in the upgrade dialog created a test subscription and opened Razorpay's window for the demo user. The unpaid subscription is stored as "incomplete" and the plan stays Free. **A completed test payment hasn't been run yet.**
 
+## Saved profile and import (added 2026-10-31)
+
+- **Storage:** `profiles.master_content` holds one resume-shaped document per user, plus `master_revision` (the same autosave conflict check as resumes) and `experience_level`. Migration `0006_profile.sql`; only the owner can read or edit it.
+- **New resumes:** `POST /api/resumes` copies the profile (`from: "profile"`, the default when there is one), names the resume after the job, and takes the experience level from the profile. Later profile edits don't change resumes already made.
+- **Upload:** `POST /api/profile/import` takes a PDF or Word file.
+  - Up to 5 MB and 10 pages. The type is checked by its first bytes, not its name.
+  - The file is read in memory and **never stored**, so there's no storage cleanup and nothing to leak.
+  - Text comes out through `unpdf` (PDF) and `mammoth` (Word). Under 200 characters means "probably a scan".
+  - With an AI key, Sonnet copies the text into fields, told not to reword anything. Otherwise, or if that fails, the rule-based parser in `src/lib/import/parse.ts` is used (8 unit tests). PDF and Word text loses bullet markers, so it finds roles by their date lines.
+  - It uses one import from the plan (Free: 3), given back when the file can't be read.
+  - This replaces the planned upload to an `imports` bucket: the `imports` table and its cleanup job are unused for now.
+- **AI in the profile:** the bullet and summary writers accept `resumeId: "profile"` and work on the profile document.
+
 ## Email and jobs
 
 - **Emails the app sends** (`src/server/email.ts`, `src/server/email-templates.ts`, all written fresh):

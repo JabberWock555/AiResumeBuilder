@@ -208,6 +208,16 @@ try { await db.query(`select public.consume_quota('pdf_download')`); check('anon
 catch (e) { check('anon cannot call consume_quota (0004)', /permission denied/.test(e.message), e.message) }
 finally { await db.exec('reset role') }
 
+// --- 0006: the saved profile
+r = await as(A, `update public.profiles set master_content = '{"contact":{},"summary":{"text":""},"sections":[]}', master_revision = 1, experience_level = 'junior' where id = '${A}' returning master_revision`)
+check('user saves own profile document', r.rows?.[0]?.master_revision === 1, r.error)
+r = await as(B, `update public.profiles set master_content = '{}' where id = '${A}' returning id`)
+check('user B cannot change A profile', r.rows?.length === 0, r.error)
+r = await as(B, `select master_content from public.profiles where id = '${A}'`)
+check('user B cannot read A profile', r.rows?.length === 0, r.error)
+r = await as(A, `update public.profiles set experience_level = 'wizard' where id = '${A}'`)
+check('experience level is checked', !!r.error, r.error)
+
 await db.exec(`delete from auth.users where id = '${A}'`)
 r = await db.query(`select (select count(*) from public.resumes where user_id = '${A}')::int as resumes,
   (select count(*) from public.target_jobs where user_id = '${A}')::int as targets,

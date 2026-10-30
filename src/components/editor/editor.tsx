@@ -57,7 +57,7 @@ const TAB_LABEL: Record<string, string> = {
   ...SECTION_LABELS,
 };
 
-function SaveIndicator({ status, onRetry }: { status: SaveStatus; onRetry: () => void }) {
+export function SaveIndicator({ status, onRetry }: { status: SaveStatus; onRetry: () => void }) {
   const map = {
     saved: { icon: <Check aria-hidden className="size-4 text-success" />, text: "Saved" },
     unsaved: { icon: <Loader2 aria-hidden className="size-4 text-text-muted" />, text: "Unsaved changes" },

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { repo } from "@/server/repo";
+import { docFor } from "@/server/docs";
 import { NotFoundError } from "@/server/errors";
 import { assertSameOrigin, body, handle } from "@/server/http";
 import { requireUser } from "@/server/session";
@@ -22,12 +23,12 @@ export const POST = handle(async (req: Request) => {
   assertSameOrigin(req);
   const user = await requireUser();
   const i = await body(req, input);
-  const resume = await repo.getResume(user.id, i.resumeId);
+  const resume = await docFor(user.id, i.resumeId);
   if (!resume) throw new NotFoundError("resume_not_found");
   const entry = resume.content.sections
     .flatMap((s) => s.entries as ExperienceEntry[])
     .find((e) => e.id === i.entryId);
-  const target = await repo.getTarget(user.id, resume.id);
+  const target = resume.id ? await repo.getTarget(user.id, resume.id) : null;
   const out = await withCredit(user.id, resume.id, `bullet_${i.mode}`, () =>
     writeBullet({
       mode: i.mode,

@@ -3,13 +3,13 @@ import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { cookies } from "next/headers";
-import { DEFAULT_SETTINGS, blankContent } from "@/lib/resume/schema";
+import { DEFAULT_SETTINGS, blankContent, type ExperienceLevel, type ResumeContent } from "@/lib/resume/schema";
 import { AuthError, ConflictError, EmailUnavailableError, NotFoundError, QuotaError } from "../errors";
 import { sendEmail } from "../email";
 import { emails } from "../email-templates";
 import type { AuthProvider, EmailLinkType } from "../auth/types";
 import { PLAN_LIMITS, periodKey } from "./limits";
-import type { AiLog, BillingStore, Ops, Plan, QuotaKind, Repo, Resume, Subscription, TargetJob, Usage, User } from "./types";
+import type { AiLog, BillingStore, Ops, Plan, ProfileDoc, QuotaKind, Repo, Resume, Subscription, TargetJob, Usage, User } from "./types";
 
 // A local JSON file standing in for Postgres and Supabase Auth when no
 // Supabase keys are set. Every call reads the file and writes it back under
@@ -19,6 +19,10 @@ import type { AiLog, BillingStore, Ops, Plan, QuotaKind, Repo, Resume, Subscript
 
 type FakeUser = User & {
   passwordHash: string;
+  masterContent?: ResumeContent | null;
+  masterRevision?: number;
+  masterUpdatedAt?: string | null;
+  experienceLevel?: ExperienceLevel | null;
   emailVerified: boolean;
   billingCustomerId: string | null;
 };
@@ -102,7 +106,36 @@ function ownResume(db: Db, userId: string, id: string) {
   return r;
 }
 
+const profileOf = (u: FakeUser): ProfileDoc =>
+  clone({
+    content: u.masterContent ?? null,
+    revision: u.masterRevision ?? 0,
+    updatedAt: u.masterUpdatedAt ?? null,
+    experienceLevel: u.experienceLevel ?? null,
+  });
+
 export const fakeRepo: Repo = {
+  getProfile: (userId) =>
+    read(async (db) => {
+      if ((await sessionUserId(db)) !== userId) throw new AuthError();
+      const u = db.users.find((x) => x.id === userId);
+      if (!u) throw new NotFoundError("user_not_found");
+      return profileOf(u);
+    }),
+
+  saveProfile: (userId, revision, patch) =>
+    tx(async (db) => {
+      if ((await sessionUserId(db)) !== userId) throw new AuthError();
+      const u = db.users.find((x) => x.id === userId);
+      if (!u) throw new NotFoundError("user_not_found");
+      if ((u.masterRevision ?? 0) !== revision) throw new ConflictError(profileOf(u));
+      if (patch.content !== undefined) u.masterContent = patch.content;
+      if (patch.experienceLevel !== undefined) u.experienceLevel = patch.experienceLevel;
+      u.masterRevision = revision + 1;
+      u.masterUpdatedAt = now();
+      return profileOf(u);
+    }),
+
   getUser: (userId) => read((db) => {
     const u = db.users.find((x) => x.id === userId);
     return u ? publicUser(u) : null;

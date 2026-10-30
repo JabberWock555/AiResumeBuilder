@@ -13,15 +13,17 @@ test.describe("F01 first resume to PDF", () => {
 
     await page.getByRole("button", { name: "Create your first resume" }).click();
     const dialog = page.getByRole("dialog");
-    await dialog.getByLabel("Resume name").fill("Riley Walker – Data Analyst");
-    await dialog.getByRole("combobox", { name: "Experience level" }).click();
-    await page.getByRole("option", { name: "Junior" }).click();
-    await dialog.getByRole("switch", { name: "Tailor it to a job ad" }).click();
+    // No profile yet: the dialog offers to set one up, and asks for the job and a level.
+    await expect(dialog.getByRole("link", { name: "Set up your profile" })).toBeVisible();
     await dialog.getByRole("textbox", { name: /^Job title/ }).fill("Data Analyst");
     await dialog.getByRole("textbox", { name: /^Job ad/ }).fill(JOB_AD);
+    await dialog.getByRole("combobox", { name: "Experience level" }).click();
+    await page.getByRole("option", { name: "Junior" }).click();
     await axe(page, "S12 create");
     await dialog.getByRole("button", { name: "Create resume" }).click();
     await expect(page).toHaveURL(/\/app\/resume\/[^/]+\/contact$/);
+    // Named after the job, and the account's name and email are already filled in.
+    await expect(page.getByLabel("Full name")).toHaveValue("Riley Walker");
     const base = page.url().replace(/\/contact$/, "");
 
     await page.getByLabel("Full name").fill("Riley Walker");
@@ -69,8 +71,13 @@ test.describe("F01 first resume to PDF", () => {
     await newUser(page);
     await page.getByRole("button", { name: "Create your first resume" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Create resume" }).click();
-    await expect(page.getByText(/Give it a name/)).toBeVisible();
+    await expect(page.getByText("Add the job title from the ad.")).toBeVisible();
+    await expect(page.getByText(/Paste the whole job ad so we can/)).toBeVisible();
     await expect(page.getByText(/Choose the level closest/)).toBeVisible();
+    // Without a job ad, it asks for a name instead.
+    await page.getByRole("dialog").getByRole("switch", { name: "I have a job ad" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Create resume" }).click();
+    await expect(page.getByText(/Give it a name/)).toBeVisible();
   });
 
   test("F01-E2 very long input is capped, not lost or broken", async ({ page, allow, newUser }) => {
@@ -134,7 +141,8 @@ test.describe("F01 first resume to PDF", () => {
     await newUser(page);
     await page.getByRole("button", { name: "Create your first resume" }).click();
     const dialog = page.getByRole("dialog");
-    await dialog.getByLabel("Resume name").fill("Double");
+    await dialog.getByRole("switch", { name: "I have a job ad" }).click();
+    await dialog.getByRole("textbox", { name: /^Resume name/ }).fill("Double");
     await dialog.getByRole("combobox", { name: "Experience level" }).click();
     await page.getByRole("option", { name: "Junior" }).click();
     await dialog.getByRole("button", { name: "Create resume" }).dblclick();
@@ -224,7 +232,11 @@ test.describe("F01 first resume to PDF", () => {
     await newUser(page);
     await page.getByRole("button", { name: "Create your first resume" }).focus();
     await page.keyboard.press("Enter");
-    await page.keyboard.type("Keyboard Only");
+    // Focus starts on the job title.
+    await expect(page.getByRole("dialog").getByRole("textbox", { name: /^Job title/ })).toBeFocused();
+    await page.keyboard.type("Keyboard Analyst");
+    await page.getByRole("dialog").getByRole("textbox", { name: /^Job ad/ }).focus();
+    await page.keyboard.type(JOB_AD);
     await page.getByRole("dialog").getByRole("combobox", { name: "Experience level" }).focus();
     await page.keyboard.press("Enter");
     await page.keyboard.type("Entry");

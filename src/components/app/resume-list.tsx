@@ -68,7 +68,7 @@ export function ResumeList({
             {resumes.length ? "Pick up where you left off, or tailor a copy for a new job." : "Let’s build your first resume."}
           </p>
         </div>
-        <CreateResumeButton atLimit={atLimit} />
+        <CreateResumeButton atLimit={atLimit} openOnParam />
       </div>
 
       {resumes.length > 0 && (

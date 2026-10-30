@@ -57,6 +57,14 @@ export type TargetJob = {
 
 export type Usage = Record<"resume" | QuotaKind, { used: number; max: number | null }>;
 
+/** The saved profile: entered once, copied into each new resume. */
+export type ProfileDoc = {
+  content: ResumeContent | null;
+  revision: number;
+  updatedAt: string | null;
+  experienceLevel: ExperienceLevel | null;
+};
+
 export type ResumePatch = Partial<Pick<Resume, "content" | "settings" | "templateId" | "name" | "folderId" | "lastScore" | "experienceLevel">>;
 
 export interface Repo {
@@ -64,6 +72,10 @@ export interface Repo {
   updateUser(userId: string, patch: Partial<Pick<User, "fullName" | "theme" | "appLanguage" | "onboarding">>): Promise<User>;
 
   usage(userId: string): Promise<Usage>;
+
+  getProfile(userId: string): Promise<ProfileDoc>;
+  /** Throws ConflictError (with the current ProfileDoc) when `revision` is stale. */
+  saveProfile(userId: string, revision: number, patch: { content?: ResumeContent; experienceLevel?: ExperienceLevel }): Promise<ProfileDoc>;
   /** Spends one unit; returns units left (null = unlimited). Throws QuotaError. */
   consumeQuota(userId: string, kind: QuotaKind): Promise<number | null>;
   refundQuota(userId: string, kind: QuotaKind): Promise<void>;

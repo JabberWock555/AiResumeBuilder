@@ -1,8 +1,9 @@
-import { Briefcase, FileText, LayoutDashboard, Library, Mail, Mic, Settings, Sparkles } from "lucide-react";
+import { Briefcase, FileText, LayoutDashboard, Library, Mail, Mic, Settings, Sparkles, UserRound } from "lucide-react";
 import type { NavItem } from "@/components/ui/layout";
 
 export const NAV: NavItem[] = [
   { href: "/app", label: "Resumes", icon: LayoutDashboard },
+  { href: "/app/profile", label: "Profile", icon: UserRound },
   { href: "/app/letters", label: "Cover letters", icon: Mail },
   { href: "/app/assistant", label: "AI assistant", icon: Sparkles },
   { href: "/app/jobs", label: "Job tracker", icon: Briefcase },

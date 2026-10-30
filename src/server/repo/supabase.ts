@@ -3,7 +3,7 @@ import { DEFAULT_SETTINGS, blankContent, type ResumeContent, type ResumeSettings
 import { ConflictError, NotFoundError } from "../errors";
 import { adminClient, clientFor, fail, sessionClaims, userClient } from "../supabase";
 import { periodKey } from "./limits";
-import type { BillingStore, Ops, Plan, QuotaKind, Repo, Resume, ResumeSummary, Subscription, TargetJob, Usage, User } from "./types";
+import type { BillingStore, Ops, Plan, ProfileDoc, QuotaKind, Repo, Resume, ResumeSummary, Subscription, TargetJob, Usage, User } from "./types";
 
 // Supabase implementation of the data layer. User actions run on the user's
 // own client (clientFor), so row level security applies to every query; the
@@ -41,6 +41,15 @@ const toResume = (r: ResumeRow): Resume => ({
   lastScore: r.last_score,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
+});
+
+const toProfile = (p: {
+  master_content: ResumeContent | null; master_revision: number; master_updated_at: string | null; experience_level: Resume["experienceLevel"] | null;
+}): ProfileDoc => ({
+  content: p.master_content,
+  revision: p.master_revision,
+  updatedAt: p.master_updated_at,
+  experienceLevel: p.experience_level,
 });
 
 const toTarget = (t: TargetRow): TargetJob => ({
@@ -115,6 +124,35 @@ export const supabaseRepo: Repo = {
     const u = await supabaseRepo.getUser(userId);
     if (!u) throw new NotFoundError("user_not_found");
     return u;
+  },
+
+  async getProfile(userId) {
+    const sb = await clientFor(userId);
+    const { data, error } = await sb
+      .from("profiles")
+      .select("master_content, master_revision, master_updated_at, experience_level")
+      .eq("id", userId)
+      .single();
+    if (error) fail(error);
+    return toProfile(data);
+  },
+
+  async saveProfile(userId, revision, patch) {
+    const sb = await clientFor(userId);
+    const row: Record<string, unknown> = { master_revision: revision + 1, master_updated_at: new Date().toISOString() };
+    if (patch.content !== undefined) row.master_content = patch.content;
+    if (patch.experienceLevel !== undefined) row.experience_level = patch.experienceLevel;
+    // Optimistic concurrency, as for resumes: only matches the revision this tab had.
+    const { data, error } = await sb
+      .from("profiles")
+      .update(row)
+      .eq("id", userId)
+      .eq("master_revision", revision)
+      .select("master_content, master_revision, master_updated_at, experience_level")
+      .maybeSingle();
+    if (error) fail(error);
+    if (data) return toProfile(data);
+    throw new ConflictError(await supabaseRepo.getProfile(userId));
   },
 
   async usage(userId) {

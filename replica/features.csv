@@ -7,7 +7,7 @@ Dashboard listing resumes with sort and grid or list view,dashboard,must,yes,yes
 Rename duplicate and delete a resume,dashboard,must,yes,yes,card menu; card menu; delete confirms
 Free usage meter in the sidebar (resumes and AI generations),billing,must,yes,yes,S11 shows 0/1 and 0/10; also PDF downloads
 Create resume form: name and experience level (7 levels),setup,must,yes,yes,S12; S12
-Target a job at creation: title company job description,setup,must,yes,yes,S12; keywords from the AI Gateway (Sonnet 5.5) with the rule-based extractor as fallback
+Target a job at creation: title company job description,setup,must,yes,yes,S12; the New resume dialog asks only for the job when a profile exists; keywords from the AI Gateway or the rule-based extractor
 Editor with section tabs and a resume switcher,editor,must,yes,yes,S18-S24; tab state survives navigation; unknown tab redirects once
 Contact section with show-on-resume switches for country and state,editor,must,yes,yes,"S18; state is free text, country is searchable"
 Experience entries: role company month-year dates Present location bullets,editor,must,yes,yes,S19; S19
@@ -41,8 +41,8 @@ Template filters: saved recent recommended,templates,should,yes,no,S28
 Profile picture and contact icons,templates,should,yes,no,S27
 View as pages toggle,preview,should,yes,yes,S27; Show page breaks
 DOCX export,export,should,yes,no,S29; button shown disabled
-Import an existing PDF or DOCX into sections,import,should,yes,no,S12 S36; not tried
-Drop a resume file on the dashboard to import,import,should,yes,no,S11
+Import an existing PDF or DOCX into sections,import,should,yes,yes,"S36 via Profile: upload PDF/DOCX (5 MB, type checked by its first bytes, read in memory, not stored) → profile sections; AI mapping with a key, rule-based parser without; uses the import quota, refunded on failure"
+Drop a resume file on the dashboard to import,import,should,yes,no,"S11; upload is on the Profile page instead (button, not drag and drop)"
 Folders to group resumes,dashboard,should,yes,no,S11 Add Section
 Resume language setting,setup,should,yes,no,S12
 Onboarding questions to segment new users,onboarding,should,yes,no,S07 S08
@@ -74,3 +74,4 @@ Their templates sample library and placeholder content,content,could,yes,skip,ow
 User counts interview-rate stats and testimonials,marketing,could,yes,skip,their proof; never reuse
 Cancel a plan in one click in Settings,billing,should,no,partial,S14; cancels at period end; Razorpay can't undo a cancellation; needs working Razorpay keys; recon: hard-to-cancel billing is a top complaint
 Sign out everywhere,auth,should,no,yes,S14; ends every session on every device
+"Saved profile: enter details once, every new resume starts from it",setup,must,no,yes,"/app/profile; set up by upload or by hand, edited with the same forms, AI and autosave as resumes; new resumes copy it and only ask for the job; user request 2026-10-31"

@@ -3,7 +3,7 @@
 Build: `test/e2e` @ ac1b38f. Date: 2026-10-24.
 
 **Result:**
-- 55 / 55 e2e cases pass on the local stand-ins (2026-10-30). On the real Supabase project: `npm run check:supabase` 19/19 and `npm run e2e:live` pass.
+- 63 / 63 e2e cases pass on the local stand-ins (2026-10-31). On the real Supabase project: `npm run check:supabase` 19/19 and `npm run e2e:live` (2 tests) pass.
 - Unit 23/23, schema 44/44, walkthrough 46/46, production dependency audit 0.
 - 9 manual cases: 1 done (the dependency audit). 6 need your Razorpay, Resend or Google keys; 2 (slow network, auto-fit) are for a later pass.
 - Bugs: 10 found, 10 fixed (4 S1, 2 S2, 3 S3, 1 S4); see `bugs.md`.
@@ -151,3 +151,19 @@ built, so they have no cases yet. F11 is ours: account and security flows.
 | F11-M1 | emails arrive | Resend: sign-up, reset, change email reach a real inbox, not spam; links work on a phone | manual | not run: needs Resend + Supabase |
 | F11-M2 | Google sign-in | Continue with Google → consent → /app; second time → straight in | manual | not run: needs the Google client |
 | F11-M3 | dependency audit | `npm audit --omit=dev` | 0 vulnerabilities | manual | pass after BUG-002 |
+
+## F12 Saved profile (ours, requested 2026-10-31)
+
+| case | type | steps | expected | auto | result |
+| --- | --- | --- | --- | --- | --- |
+| F12-H1 | happy | dashboard nudge → Set up your profile → upload a PDF resume | "We found 2 roles, 1 school, 6 skills, a summary"; contact and roles filled; saved; one import used | e2e | pass |
+| F12-H2 | happy | upload a Word (.docx) resume | same result | e2e | pass |
+| F12-H3 | happy | blank profile, fill it in → New resume for a job → only job title, company, ad | resume named "Name – Title at Company", level and details from the profile, opens on the job match | e2e | pass |
+| F12-E1 | edit later | change the profile after making a resume | the resume keeps its own copy | e2e | pass |
+| F12-E2 | bad files | scan-like PDF, a text file named .pdf | "couldn’t find any text" / "isn’t a PDF or Word"; import quota given back | e2e | pass |
+| F12-E3 | overwrite | import over an existing profile | asks first; "Keep my profile" changes nothing | e2e | pass |
+| F12-E4 | blank option | with a profile, choose Start blank | an empty resume (name and level asked) | e2e | pass |
+| F12-N1 | second user | user B reads and saves their profile | sees nothing of A's; A's profile unchanged | e2e | pass |
+| F12-L1 | live | on the real Supabase: upload, edit, build a resume for a job | saved in the database; resume copied from the profile; keywords extracted | e2e:live | pass |
+| F12-M1 | your own resume | upload your real resume (PDF and Word) | most fields land in the right place; fix the rest in the editor | manual | to do |
+
