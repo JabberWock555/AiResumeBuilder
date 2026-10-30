@@ -122,6 +122,7 @@ Switched from Stripe on 2026-10-30, at your request. `0003_razorpay.sql` renames
 - **Paying:** `POST /api/billing/checkout {plan}` creates a Razorpay subscription (monthly or 3-monthly) or a one-off order (lifetime). The upgrade dialog then opens **Razorpay Checkout**, their modal for card, UPI and netbanking. No payment details touch our servers.
   - A user already on a paid plan is refused, so nobody pays twice.
   - Subscriptions run for 10 years of cycles (120 monthly or 40 quarterly), because Razorpay needs a fixed count.
+- **Why not Razorpay Payment Buttons or subscription links:** a button (`pl_…`) or a dashboard subscription link (`rzp.io/…`, one `sub_…`) takes money without knowing which of our users paid. Razorpay only sees whatever email the buyer types, so the plan couldn't switch on reliably, and a subscription link can only be taken by one customer. The app creates the order or subscription itself, tagged with the user id, and opens the same Razorpay window. The lifetime price (₹4,999) is taken from your button `pl_Tu4NCHL5RXMEsK`. Plans in the test account: monthly ₹299 (`plan_Tu4EAMePNKx4Sc`), every 3 months ₹499 (`plan_Tu4G7Ig1uQvMIL`).
 - **Instant upgrade:** Checkout's success result goes to `POST /api/billing/verify`.
   - The server checks Razorpay's signature: HMAC of `payment_id|subscription_id`, or `order_id|payment_id` for orders, with the key secret.
   - It re-fetches the subscription or order and checks it belongs to this user.
@@ -144,7 +145,7 @@ Switched from Stripe on 2026-10-30, at your request. `0003_razorpay.sql` renames
 - **Tested:**
   - `npm test`: 10 handler tests (statuses, idempotency, retries, out-of-order, cancel flag, lifetime and refunds) plus 2 signature tests.
   - e2e F06 and F09: signed Razorpay webhooks through the real route on the dev server; Settings shows each state.
-  - **Not run against Razorpay yet:** the keys in `.env.local` are refused (401, see below).
+  - **Against your Razorpay test account (2026-10-31):** keys accepted. `/api/billing/plans` serves ₹299, ₹499 and ₹4,999. Continue in the upgrade dialog created a test subscription and opened Razorpay's window for the demo user. The unpaid subscription is stored as "incomplete" and the plan stays Free. **A completed test payment hasn't been run yet.**
 
 ## Email and jobs
 
