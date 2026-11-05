@@ -10,8 +10,10 @@
 //   npm run seed -- --supabase            create the demo user (email already
 //                                         confirmed) and their resume
 //   npm run seed -- --supabase --reset    delete the demo user first
+// This needs DEMO_PASSWORD in .env.local: this repo is public, so a password
+// written here must never work on a real project.
 //
-// Test login for local development only (not a real account anywhere):
+// Test login for the local JSON file only (it works nowhere else):
 //   email:    demo@example.com
 //   password: demo-password-123
 
@@ -31,7 +33,7 @@ if (!SUPABASE && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.DATA_BACKEN
 
 const FILE = path.join(process.cwd(), ".data", "db.json");
 const EMAIL = "demo@example.com";
-const PASSWORD = "demo-password-123";
+const LOCAL_PASSWORD = "demo-password-123";
 
 const empty = () => ({
   users: [], sessions: [], emailTokens: [], resumes: [], targets: [], usage: [], exports: [], aiLogs: [],
@@ -136,7 +138,7 @@ async function seedLocal() {
   const userId = randomUUID();
   db.users.push({
     id: userId, email: EMAIL, fullName: "Jordan Lee", plan: "free", theme: "system", appLanguage: "en-US",
-    onboarding: {}, createdAt: now, passwordHash: hash(PASSWORD), emailVerified: true, billingCustomerId: null,
+    onboarding: {}, createdAt: now, passwordHash: hash(LOCAL_PASSWORD), emailVerified: true, billingCustomerId: null,
   });
   const resumeId = randomUUID();
   db.resumes.push({ id: resumeId, userId, folderId: null, ...resume, revision: 1, source: "scratch", lastScore: null, createdAt: now, updatedAt: now });
@@ -152,6 +154,10 @@ async function seedSupabase() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env.local");
   if (process.env.VERCEL_ENV === "production") throw new Error("Refusing to seed a production project.");
+  const password = process.env.DEMO_PASSWORD ?? "";
+  if (password.length < 12 || password === LOCAL_PASSWORD) {
+    throw new Error("Set DEMO_PASSWORD in .env.local to a private password of at least 12 characters (openssl rand -base64 18).");
+  }
   const db = createClient(url, key, { auth: { persistSession: false } });
 
   const existing = await findUser(db, EMAIL);
@@ -162,7 +168,7 @@ async function seedSupabase() {
   if (existing) await db.auth.admin.deleteUser(existing.id);
 
   const { data, error } = await db.auth.admin.createUser({
-    email: EMAIL, password: PASSWORD, email_confirm: true, user_metadata: { full_name: "Jordan Lee" },
+    email: EMAIL, password, email_confirm: true, user_metadata: { full_name: "Jordan Lee" },
   });
   if (error) throw error;
   const userId = data.user.id;

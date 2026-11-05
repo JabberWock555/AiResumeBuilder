@@ -112,7 +112,7 @@ Copy `.env.example` to `.env.local` and fill it in as you go.
   - `npm run walkthrough`: user B gets 404 from A's resume on GET, PATCH, DELETE, export and AI, and an empty list. **Passes.**
   - `npm run check:supabase`: the same rules over the real Supabase API with two throwaway users, plus storage folders. **19/19 pass on the real project (2026-10-30).**
   - `npm run e2e:live`: log in as the demo user, edit, autosave, reload, PDF and re-download, on the real project. **Passes.**
-- **Seed:** `npm run seed` (local) or `npm run seed -- --supabase`. One made-up person (Jordan Lee), one resume and one job ad. It refuses to run against a production deployment.
+- **Seed:** `npm run seed` (local) or `npm run seed -- --supabase`. One made-up person (Jordan Lee), one resume and one job ad. It refuses to run against a production deployment, and on Supabase it needs a private `DEMO_PASSWORD`: the password in the public seed file only works on the local JSON file.
 - **Backups:** Supabase's daily backups come with the Pro plan, which keeps 7 days. The Free plan has none you can restore from. **Before launch:** move the project to Pro (or add point-in-time recovery), then check Database → Backups shows a backup from the last 24 hours. Not checked yet.
 
 ## Payments (Razorpay)
@@ -122,7 +122,7 @@ Switched from Stripe on 2026-10-30, at your request. `0003_razorpay.sql` renames
 - **Paying:** `POST /api/billing/checkout {plan}` creates a Razorpay subscription (monthly or 3-monthly) or a one-off order (lifetime). The upgrade dialog then opens **Razorpay Checkout**, their modal for card, UPI and netbanking. No payment details touch our servers.
   - A user already on a paid plan is refused, so nobody pays twice.
   - Subscriptions run for 10 years of cycles (120 monthly or 40 quarterly), because Razorpay needs a fixed count.
-- **Why not Razorpay Payment Buttons or subscription links:** a button (`pl_…`) or a dashboard subscription link (`rzp.io/…`, one `sub_…`) takes money without knowing which of our users paid. Razorpay only sees whatever email the buyer types, so the plan couldn't switch on reliably, and a subscription link can only be taken by one customer. The app creates the order or subscription itself, tagged with the user id, and opens the same Razorpay window. The lifetime price (₹4,999) is taken from your button `pl_Tu4NCHL5RXMEsK`. Plans in the test account: monthly ₹299 (`plan_Tu4EAMePNKx4Sc`), every 3 months ₹499 (`plan_Tu4G7Ig1uQvMIL`).
+- **Why not Razorpay Payment Buttons or subscription links:** a button (`pl_…`) or a dashboard subscription link (`rzp.io/…`, one `sub_…`) takes money without knowing which of our users paid. Razorpay only sees whatever email the buyer types, so the plan couldn't switch on reliably, and a subscription link can only be taken by one customer. The app creates the order or subscription itself, tagged with the user id, and opens the same Razorpay window. The lifetime price (₹4,999) is taken from your payment button. Test plans: monthly ₹299 and every 3 months ₹499; their ids are in `.env.local`.
 - **Instant upgrade:** Checkout's success result goes to `POST /api/billing/verify`.
   - The server checks Razorpay's signature: HMAC of `payment_id|subscription_id`, or `order_id|payment_id` for orders, with the key secret.
   - It re-fetches the subscription or order and checks it belongs to this user.

@@ -1,6 +1,6 @@
 // Opt-in smoke test against the real Supabase project (your .env.local), with
-// the seeded demo account (npm run seed -- --supabase). Start the plain "web"
-// launch config, then: npm run e2e:live
+// the seeded demo account (npm run seed -- --supabase) and its private password
+// in DEMO_PASSWORD. Start the plain "web" launch config, then: npm run e2e:live
 // Uses one of the demo account's free PDF downloads per new revision.
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
@@ -10,7 +10,12 @@ test.skip(!process.env.LIVE_SUPABASE, "set LIVE_SUPABASE=1 (npm run e2e:live) to
 test("live Supabase: log in, edit, autosave, reload, PDF", async ({ page }) => {
   const seed = await readFile("scripts/seed.mjs", "utf8");
   const email = seed.match(/const EMAIL = "([^"]+)"/)![1];
-  const password = seed.match(/const PASSWORD = "([^"]+)"/)![1];
+  try {
+    process.loadEnvFile(".env.local");
+  } catch {}
+  const password = process.env.DEMO_PASSWORD;
+  test.skip(!password, "set DEMO_PASSWORD in .env.local");
+  if (!password) return;
   const errors: string[] = [];
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   page.on("response", (r) => r.status() >= 500 && errors.push(`${r.status()} ${r.url()}`));

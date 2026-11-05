@@ -96,7 +96,7 @@ Open http://localhost:3000. With no `.env.local`, everything runs locally:
 - the AI is a demo writer;
 - payments are off.
 
-The demo login is in [`scripts/seed.mjs`](scripts/seed.mjs).
+The demo login is in [`scripts/seed.mjs`](scripts/seed.mjs), and it only works on that local file. On Supabase, the demo user's password comes from `DEMO_PASSWORD` in `.env.local`.
 
 ### Connecting real services
 

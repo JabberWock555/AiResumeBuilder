@@ -5,7 +5,7 @@ Data layer: Supabase when its keys are set, otherwise the local JSON file
 is set, otherwise the deterministic demo writer. Payments, email, OAuth and
 jobs: see `replica/backend.md`.
 
-Run it: `npm run seed -- --reset` (demo login is in `scripts/seed.mjs`),
+Run it: `npm run seed -- --reset` (the local demo login is in `scripts/seed.mjs`),
 `npm run dev`, then `npm run walkthrough` for the end-to-end check.
 
 | ID | date | status | missing | harder than expected |

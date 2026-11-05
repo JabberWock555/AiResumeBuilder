@@ -14,7 +14,7 @@ npm test                 # unit (vitest)
 npm run test:schema      # all migrations on in-memory Postgres
 npm run e2e              # Playwright; needs the local dev server below
 npm run walkthrough      # scripted tour; also refreshes replica/clone-screens/
-npm run e2e:live         # real Supabase; needs the plain dev server and the seeded demo user
+npm run e2e:live         # real Supabase; needs the plain dev server, the seeded demo user and DEMO_PASSWORD
 npm run check:supabase   # access rules on the real project
 npm run audit:prod       # production dependency audit
 npm run db:migrate       # apply supabase/migrations via DATABASE_URL
@@ -96,7 +96,7 @@ Known test traps:
 
 - **Never commit** `.env*` (except `.env.example`) or real keys, and don't print key values. When adding a variable, add it to `.env.example` with no value.
 - **Razorpay stays on test keys** until deployment.
-- **The demo login in `scripts/seed.mjs` is public.** Never seed a production project.
+- **This repo is public.** The password in `scripts/seed.mjs` is only for the local JSON file. A password in the repo must never work on a real project: use `DEMO_PASSWORD` in `.env.local`, and never seed production.
 - **Pin new packages** with `--save-exact` to a release at least two weeks old. Security fixes may be newer: note why in the commit.
 - **Run `npm run audit:prod` before merging.** Check `npm audit fix` changes before committing them.
 
